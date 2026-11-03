@@ -1,6 +1,6 @@
 ﻿namespace Claims.Auditing
 {
-    public class Auditer
+    public class Auditer : IAuditer
     {
         private readonly AuditContext _auditContext;
 

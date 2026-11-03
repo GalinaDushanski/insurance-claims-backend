@@ -29,6 +29,9 @@ bld/
 [Ll]ogs/
 # Data folder
 [Dd]ata/
+!Claims/Data/
+Claims/Data/*
+!Claims/Data/ClaimsContext.cs
 
 # Visual Studio 2015 cache/options directory
 .vs/
