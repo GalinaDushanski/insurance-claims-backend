@@ -17,10 +17,10 @@ namespace Claims.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "6.0.7")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
-            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder, 1L, 1);
+            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
             modelBuilder.Entity("Claims.Auditing.ClaimAudit", b =>
                 {
@@ -28,7 +28,7 @@ namespace Claims.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("ClaimId")
                         .IsRequired()
@@ -43,32 +43,32 @@ namespace Claims.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ClaimAudits");
+                    b.ToTable("ClaimAudits", (string)null);
                 });
-            
-            modelBuilder.Entity("Claims.Auditing.CoverAudit", b =>
-            {
-                b.Property<int>("Id")
-                    .ValueGeneratedOnAdd()
-                    .HasColumnType("int");
+                modelBuilder.Entity("Claims.Auditing.CoverAudit", b =>
+    {
+        b.Property<int>("Id")
+            .ValueGeneratedOnAdd()
+            .HasColumnType("int");
 
-                SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
+        SqlServerPropertyBuilderExtensions.UseIdentityColumn(
+            b.Property<int>("Id"));
 
-                b.Property<string>("CoverId")
-                    .IsRequired()
-                    .HasColumnType("nvarchar(max)");
+        b.Property<string>("CoverId")
+            .IsRequired()
+            .HasColumnType("nvarchar(max)");
 
-                b.Property<DateTime>("Created")
-                    .HasColumnType("datetime2");
+        b.Property<DateTime>("Created")
+            .HasColumnType("datetime2");
 
-                b.Property<string>("HttpRequestType")
-                    .IsRequired()
-                    .HasColumnType("nvarchar(max)");
+        b.Property<string>("HttpRequestType")
+            .IsRequired()
+            .HasColumnType("nvarchar(max)");
 
-                b.HasKey("Id");
+        b.HasKey("Id");
 
-                b.ToTable("CoverAudits");
-            });
+        b.ToTable("CoverAudits", (string)null);
+    });
 #pragma warning restore 612, 618
         }
     }

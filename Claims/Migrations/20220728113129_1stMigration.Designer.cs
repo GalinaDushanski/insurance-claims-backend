@@ -47,6 +47,30 @@ namespace Claims.Migrations
 
                     b.ToTable("ClaimAudits");
                 });
+                modelBuilder.Entity("Claims.Auditing.CoverAudit", b =>
+{
+    b.Property<int>("Id")
+        .ValueGeneratedOnAdd()
+        .HasColumnType("int");
+
+    SqlServerPropertyBuilderExtensions.UseIdentityColumn(
+        b.Property<int>("Id"), 1L, 1);
+
+    b.Property<string>("CoverId")
+        .IsRequired()
+        .HasColumnType("nvarchar(max)");
+
+    b.Property<DateTime>("Created")
+        .HasColumnType("datetime2");
+
+    b.Property<string>("HttpRequestType")
+        .IsRequired()
+        .HasColumnType("nvarchar(max)");
+
+    b.HasKey("Id");
+
+    b.ToTable("CoverAudits");
+});
 #pragma warning restore 612, 618
         }
     }
