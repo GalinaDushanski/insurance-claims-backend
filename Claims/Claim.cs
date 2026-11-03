@@ -1,4 +1,5 @@
 ﻿using System.Text.Json.Serialization;
+using Claims.Serialization;
 using MongoDB.Bson.Serialization.Attributes;
 
 namespace Claims
@@ -12,6 +13,7 @@ namespace Claims
         public string CoverId { get; set; }
 
         [BsonElement("created")]
+        [JsonConverter(typeof(UtcDateTimeConverter))]
         public DateTime Created { get; set; }
 
         [BsonElement("name")]

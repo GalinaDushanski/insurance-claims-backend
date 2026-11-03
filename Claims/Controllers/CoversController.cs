@@ -1,4 +1,5 @@
 using Claims.Services;
+using Claims.ModelBinding;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Claims.Controllers;
@@ -15,7 +16,10 @@ public class CoversController : ControllerBase
     }
 
     [HttpPost("compute")]
-    public async Task<ActionResult> ComputePremiumAsync(DateTime startDate, DateTime endDate, CoverType coverType)
+    public async Task<ActionResult> ComputePremiumAsync(
+        [ModelBinder(BinderType = typeof(UtcDateTimeModelBinder))] DateTime startDate,
+        [ModelBinder(BinderType = typeof(UtcDateTimeModelBinder))] DateTime endDate,
+        CoverType coverType)
     {
         return Ok(_coverService.ComputePremium(startDate, endDate, coverType));
     }

@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+using Claims.Serialization;
 using MongoDB.Bson.Serialization.Attributes;
 
 namespace Claims;
@@ -8,9 +10,11 @@ public class Cover
     public string Id { get; set; }
 
     [BsonElement("startDate")]
+    [JsonConverter(typeof(UtcDateTimeConverter))]
     public DateTime StartDate { get; set; }
 
     [BsonElement("endDate")]
+    [JsonConverter(typeof(UtcDateTimeConverter))]
     public DateTime EndDate { get; set; }
 
     [BsonElement("claimType")]

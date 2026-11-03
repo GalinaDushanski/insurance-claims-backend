@@ -1,4 +1,5 @@
 using Claims.Services;
+using Claims.Exceptions;
 using Xunit;
 
 namespace Claims.Tests.Unit;
@@ -14,7 +15,12 @@ public class ClaimServiceTests
     {
         _repository = new FakeClaimRepository(_calls);
         _auditer = new RecordingAuditer(_calls);
-        _service = new ClaimService(_repository, _auditer);
+        var covers = new FakeCoverRepository([]);
+        covers.Items.Add(new Cover
+        {
+            Id = "cover-id", StartDate = new DateTime(2030, 1, 1), EndDate = new DateTime(2030, 1, 2)
+        });
+        _service = new ClaimService(_repository, _auditer, covers);
     }
 
     [Fact]
@@ -88,18 +94,57 @@ public class ClaimServiceTests
         Assert.Equal(new[] { "save-start", "save-complete", $"audit-claim:POST:{item.Id}" }, _calls);
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task Delete_audits_before_deletion_even_when_record_is_missing(bool exists)
+    [Fact]
+    public async Task Delete_existing_record_audits_before_deletion()
     {
         var item = NewClaim();
-        if (exists) _repository.Items.Add(item);
+        _repository.Items.Add(item);
 
         await _service.DeleteAsync(item.Id);
 
         Assert.Empty(_repository.Items);
         Assert.Equal(new[] { $"audit-claim:DELETE:{item.Id}", $"delete:{item.Id}" }, _calls);
+    }
+
+    [Fact]
+    public async Task Delete_missing_record_throws_without_auditing_or_deleting()
+    {
+        var other = NewClaim();
+        _repository.Items.Add(other);
+
+        var error = await Assert.ThrowsAsync<ResourceNotFoundException>(() => _service.DeleteAsync("missing"));
+
+        Assert.Equal("Claim 'missing' was not found.", error.Message);
+        Assert.Same(other, Assert.Single(_repository.Items));
+        Assert.Empty(_calls);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Delete_waits_for_existence_check_before_any_side_effects(bool exists)
+    {
+        var item = NewClaim();
+        if (exists) _repository.Items.Add(item);
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _repository.LookupCompletion = completion;
+
+        var deletion = _service.DeleteAsync(item.Id);
+        Assert.False(deletion.IsCompleted);
+        Assert.Empty(_calls);
+        completion.SetResult();
+
+        if (exists)
+        {
+            await deletion;
+            Assert.Equal(new[] { $"audit-claim:DELETE:{item.Id}", $"delete:{item.Id}" }, _calls);
+        }
+        else
+        {
+            await Assert.ThrowsAsync<ResourceNotFoundException>(() => deletion);
+            Assert.Empty(_calls);
+        }
+        Assert.Empty(_repository.Items);
     }
 
     [Fact]
@@ -125,7 +170,15 @@ public class ClaimServiceTests
 
         Assert.Same(item, Assert.Single(await _service.GetAllAsync()));
         Assert.Same(item, await _service.GetByIdAsync(item.Id));
-        Assert.Null(await _service.GetByIdAsync("missing"));
+        Assert.Empty(_calls);
+    }
+
+    [Fact]
+    public async Task Get_missing_record_throws_without_auditing_or_deleting()
+    {
+        var error = await Assert.ThrowsAsync<ResourceNotFoundException>(() => _service.GetByIdAsync("missing"));
+
+        Assert.Equal("Claim 'missing' was not found.", error.Message);
         Assert.Empty(_calls);
     }
 

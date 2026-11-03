@@ -28,7 +28,7 @@ If needed, trust the local HTTPS certificate with `dotnet dev-certs https --trus
 
 ## Run the tests
 
-Docker-free service, premium, and HTTP characterization tests:
+Docker-free service, validation, premium, and HTTP tests:
 
 ```sh
 dotnet test --no-restore --filter-class 'Claims.Tests.Unit.*'
@@ -39,6 +39,19 @@ All tests, including the Docker integration test:
 ```sh
 dotnet test --no-restore
 ```
+
+## Validation and responses
+
+Claims require a valid cover, a damage cost from 0 to 100000, and a created
+timestamp within that cover's period. Covers may start today in UTC or later,
+must end after they start, and may last at most one calendar year. The same cover
+rules apply to premium quotes. Send ISO 8601 dates with `Z` or an explicit offset;
+dates without a timezone are interpreted as UTC.
+
+Invalid submissions return 400 with field errors. Missing claim or cover GET and
+DELETE requests return 404. See the technical documentation for boundary rules,
+request-model requirements, error examples, and known limitations. Premium
+calculation still preserves the legacy defects pending Task 5.
 
 ## Documentation
 

@@ -1,5 +1,6 @@
 using Claims.Auditing;
 using Claims.Data;
+using Claims.Filters;
 using Claims.Repositories;
 using Claims.Services;
 using Microsoft.EntityFrameworkCore;
@@ -25,7 +26,11 @@ await mongoContainer.StartAsync();
 
 // Add services to the container.
 builder.Services
-    .AddControllers()
+    .AddControllers(options =>
+    {
+        options.Filters.Add<ValidationExceptionFilter>();
+        options.Filters.Add<ResourceNotFoundExceptionFilter>();
+    })
     .AddJsonOptions(x =>
     {
         x.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
@@ -47,6 +52,7 @@ builder.Services.AddScoped<IAuditer, Auditer>();
 builder.Services.AddScoped<IClaimService, ClaimService>();
 builder.Services.AddScoped<ICoverService, CoverService>();
 builder.Services.AddSingleton<PremiumCalculator>();
+builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();

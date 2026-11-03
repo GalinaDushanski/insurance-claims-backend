@@ -7,12 +7,16 @@ internal sealed class FakeClaimRepository(List<string> calls) : IClaimRepository
 {
     public List<Claim> Items { get; } = [];
     public TaskCompletionSource? AddCompletion { get; set; }
+    public TaskCompletionSource? LookupCompletion { get; set; }
     public Exception? AddFailure { get; set; }
 
     public Task<IEnumerable<Claim>> GetAllAsync() => Task.FromResult<IEnumerable<Claim>>(Items);
 
-    public Task<Claim?> GetByIdAsync(string id) =>
-        Task.FromResult(Items.SingleOrDefault(item => item.Id == id));
+    public async Task<Claim?> GetByIdAsync(string id)
+    {
+        if (LookupCompletion is not null) await LookupCompletion.Task;
+        return Items.SingleOrDefault(item => item.Id == id);
+    }
 
     public async Task AddAsync(Claim claim)
     {
@@ -35,12 +39,16 @@ internal sealed class FakeCoverRepository(List<string> calls) : ICoverRepository
 {
     public List<Cover> Items { get; } = [];
     public TaskCompletionSource? AddCompletion { get; set; }
+    public TaskCompletionSource? LookupCompletion { get; set; }
     public Exception? AddFailure { get; set; }
 
     public Task<IEnumerable<Cover>> GetAllAsync() => Task.FromResult<IEnumerable<Cover>>(Items);
 
-    public Task<Cover?> GetByIdAsync(string id) =>
-        Task.FromResult(Items.SingleOrDefault(item => item.Id == id));
+    public async Task<Cover?> GetByIdAsync(string id)
+    {
+        if (LookupCompletion is not null) await LookupCompletion.Task;
+        return Items.SingleOrDefault(item => item.Id == id);
+    }
 
     public async Task AddAsync(Cover cover)
     {
