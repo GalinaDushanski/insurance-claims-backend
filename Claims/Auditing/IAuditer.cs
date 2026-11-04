@@ -2,6 +2,6 @@ namespace Claims.Auditing;
 
 public interface IAuditer
 {
-    void AuditClaim(string id, string httpRequestType);
-    void AuditCover(string id, string httpRequestType);
+    Task AuditClaimAsync(string id, string httpRequestType, CancellationToken cancellationToken = default);
+    Task AuditCoverAsync(string id, string httpRequestType, CancellationToken cancellationToken = default);
 }

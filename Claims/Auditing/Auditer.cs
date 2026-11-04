@@ -1,38 +1,17 @@
-﻿namespace Claims.Auditing
+namespace Claims.Auditing;
+
+public sealed class Auditer(AuditQueue queue, TimeProvider timeProvider) : IAuditer
 {
-    public class Auditer : IAuditer
+    public Task AuditClaimAsync(string id, string httpRequestType, CancellationToken cancellationToken = default) =>
+        PublishAsync(AuditEntityType.Claim, id, httpRequestType, cancellationToken);
+
+    public Task AuditCoverAsync(string id, string httpRequestType, CancellationToken cancellationToken = default) =>
+        PublishAsync(AuditEntityType.Cover, id, httpRequestType, cancellationToken);
+
+    private async Task PublishAsync(AuditEntityType entityType, string id, string httpRequestType,
+        CancellationToken cancellationToken)
     {
-        private readonly AuditContext _auditContext;
-
-        public Auditer(AuditContext auditContext)
-        {
-            _auditContext = auditContext;
-        }
-
-        public void AuditClaim(string id, string httpRequestType)
-        {
-            var claimAudit = new ClaimAudit()
-            {
-                Created = DateTime.Now,
-                HttpRequestType = httpRequestType,
-                ClaimId = id
-            };
-
-            _auditContext.Add(claimAudit);
-            _auditContext.SaveChanges();
-        }
-        
-        public void AuditCover(string id, string httpRequestType)
-        {
-            var coverAudit = new CoverAudit()
-            {
-                Created = DateTime.Now,
-                HttpRequestType = httpRequestType,
-                CoverId = id
-            };
-
-            _auditContext.Add(coverAudit);
-            _auditContext.SaveChanges();
-        }
+        var auditEvent = new AuditEvent(entityType, id, httpRequestType, timeProvider.GetLocalNow().DateTime);
+        await queue.EnqueueAsync(auditEvent, cancellationToken);
     }
 }

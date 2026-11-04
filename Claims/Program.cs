@@ -48,7 +48,10 @@ builder.Services.AddDbContext<ClaimsContext>(options =>
 
 builder.Services.AddScoped<IClaimRepository, ClaimRepository>();
 builder.Services.AddScoped<ICoverRepository, CoverRepository>();
-builder.Services.AddScoped<IAuditer, Auditer>();
+builder.Services.AddSingleton<IAuditer, Auditer>();
+builder.Services.AddSingleton<AuditQueue>();
+builder.Services.AddScoped<IAuditWriter, SqlAuditWriter>();
+builder.Services.AddHostedService<AuditWorker>();
 builder.Services.AddScoped<IClaimService, ClaimService>();
 builder.Services.AddScoped<ICoverService, CoverService>();
 builder.Services.AddSingleton<PremiumCalculator>();

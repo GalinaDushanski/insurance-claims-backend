@@ -6,7 +6,7 @@ Claims and covers are stored in MongoDB; audit records are stored in SQL Server.
 ## Prerequisites and setup
 
 - .NET 10 SDK compatible with `global.json`.
-- A running Docker daemon for the application and integration test.
+- A running Docker daemon for the application and Docker-backed tests.
 
 From the repository root:
 
@@ -34,7 +34,13 @@ Docker-free service, validation, premium, and HTTP tests:
 dotnet test --no-restore --filter-class 'Claims.Tests.Unit.*'
 ```
 
-All tests, including the Docker integration test:
+Docker-backed SQL audit persistence and application smoke tests:
+
+```sh
+dotnet test --no-restore --filter-class 'Claims.Tests.Integration.*' --filter-class Claims.Tests.ClaimsControllerTests
+```
+
+All tests:
 
 ```sh
 dotnet test --no-restore
@@ -52,6 +58,16 @@ Invalid submissions return 400 with field errors. Missing claim or cover GET and
 DELETE requests return 404. See the technical documentation for boundary rules,
 request-model requirements, error examples, and known limitations. Premium
 calculation still preserves the legacy defects pending Task 5.
+
+## Asynchronous auditing
+
+Successful MongoDB writes enqueue audit events for a background SQL writer.
+DELETE now finishes before its audit event is published. Requests wait for queue
+acceptance, not SQL persistence. The queue holds 1000 events and applies
+backpressure when full; failed writes get up to three attempts with 1- and 2-second
+delays. Shutdown attempts to drain the queue until the host deadline. Events are
+in memory and can be lost on crashes or exhausted retries. See the architecture
+document for consistency and shutdown limits.
 
 ## Documentation
 

@@ -48,7 +48,7 @@ public class CoverServiceTests
     }
 
     [Fact]
-    public async Task Create_waits_for_persistence_before_auditing()
+    public async Task Create_waits_for_persistence_before_publishing()
     {
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _repository.AddCompletion = completion;
@@ -64,7 +64,7 @@ public class CoverServiceTests
     }
 
     [Fact]
-    public async Task Create_does_not_audit_when_persistence_fails()
+    public async Task Create_does_not_publish_when_persistence_fails()
     {
         var failure = new InvalidOperationException("Save failed");
         _repository.AddFailure = failure;
@@ -77,9 +77,9 @@ public class CoverServiceTests
     }
 
     [Fact]
-    public async Task Create_leaves_saved_record_when_auditing_fails()
+    public async Task Create_leaves_saved_record_when_audit_publication_fails()
     {
-        var failure = new InvalidOperationException("Audit failed");
+        var failure = new InvalidOperationException("Enqueue failed");
         _auditer.Failure = failure;
         var item = NewCover();
 
@@ -91,7 +91,7 @@ public class CoverServiceTests
     }
 
     [Fact]
-    public async Task Delete_existing_record_audits_before_deletion()
+    public async Task Delete_existing_record_publishes_after_deletion()
     {
         var item = NewCover();
         _repository.Items.Add(item);
@@ -99,7 +99,7 @@ public class CoverServiceTests
         await _service.DeleteAsync(item.Id);
 
         Assert.Empty(_repository.Items);
-        Assert.Equal(new[] { $"audit-cover:DELETE:{item.Id}", $"delete:{item.Id}" }, _calls);
+        Assert.Equal(new[] { $"delete-start:{item.Id}", $"delete-complete:{item.Id}", $"audit-cover:DELETE:{item.Id}" }, _calls);
     }
 
     [Fact]
@@ -133,7 +133,7 @@ public class CoverServiceTests
         if (exists)
         {
             await deletion;
-            Assert.Equal(new[] { $"audit-cover:DELETE:{item.Id}", $"delete:{item.Id}" }, _calls);
+            Assert.Equal(new[] { $"delete-start:{item.Id}", $"delete-complete:{item.Id}", $"audit-cover:DELETE:{item.Id}" }, _calls);
         }
         else
         {
@@ -144,9 +144,9 @@ public class CoverServiceTests
     }
 
     [Fact]
-    public async Task Delete_does_not_reach_repository_when_auditing_fails()
+    public async Task Delete_remains_deleted_when_audit_publication_fails()
     {
-        var failure = new InvalidOperationException("Audit failed");
+        var failure = new InvalidOperationException("Enqueue failed");
         _auditer.Failure = failure;
         var item = NewCover();
         _repository.Items.Add(item);
@@ -154,8 +154,8 @@ public class CoverServiceTests
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.DeleteAsync(item.Id));
 
         Assert.Same(failure, error);
-        Assert.Same(item, Assert.Single(_repository.Items));
-        Assert.Equal(new[] { $"audit-cover:DELETE:{item.Id}" }, _calls);
+        Assert.Empty(_repository.Items);
+        Assert.Equal(new[] { $"delete-start:{item.Id}", $"delete-complete:{item.Id}", $"audit-cover:DELETE:{item.Id}" }, _calls);
     }
 
     [Fact]
@@ -176,6 +176,60 @@ public class CoverServiceTests
 
         Assert.Equal("Cover 'missing' was not found.", error.Message);
         Assert.Empty(_calls);
+    }
+
+    [Fact]
+    public async Task Delete_waits_for_persistence_before_publishing()
+    {
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _repository.DeleteCompletion = completion;
+        var item = NewCover();
+        _repository.Items.Add(item);
+
+        var deletion = _service.DeleteAsync(item.Id);
+
+        Assert.False(deletion.IsCompleted);
+        Assert.Equal(new[] { $"delete-start:{item.Id}" }, _calls);
+        Assert.Same(item, Assert.Single(_repository.Items));
+        completion.SetResult();
+        await deletion;
+        Assert.Empty(_repository.Items);
+        Assert.Equal(new[] { $"delete-start:{item.Id}", $"delete-complete:{item.Id}", $"audit-cover:DELETE:{item.Id}" }, _calls);
+    }
+
+    [Fact]
+    public async Task Delete_does_not_publish_when_persistence_fails()
+    {
+        var failure = new InvalidOperationException("Delete failed");
+        _repository.DeleteFailure = failure;
+        var item = NewCover();
+        _repository.Items.Add(item);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.DeleteAsync(item.Id));
+
+        Assert.Same(failure, error);
+        Assert.Same(item, Assert.Single(_repository.Items));
+        Assert.Equal(new[] { $"delete-start:{item.Id}" }, _calls);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Operations_wait_for_publication_after_database_changes_complete(bool deleting)
+    {
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _auditer.PublicationCompletion = completion;
+        var item = NewCover();
+        if (deleting) _repository.Items.Add(item);
+
+        Task operation = deleting ? _service.DeleteAsync(item.Id) : _service.CreateAsync(item);
+
+        Assert.False(operation.IsCompleted);
+        if (deleting) Assert.Empty(_repository.Items);
+        else Assert.Same(item, Assert.Single(_repository.Items));
+        Assert.Equal($"audit-cover:{(deleting ? "DELETE" : "POST")}:{item.Id}", _calls.Last());
+        completion.SetResult();
+        await operation;
     }
 
     private static Cover NewCover() =>

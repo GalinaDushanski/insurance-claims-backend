@@ -117,14 +117,14 @@ public class ControllerResponseTests : IDisposable
     [Theory]
     [InlineData("/Claims/existing", "claim")]
     [InlineData("/Covers/existing", "cover")]
-    public async Task Existing_resource_delete_preserves_200_and_audit_order_then_returns_404_on_repeat(string path, string resource)
+    public async Task Existing_resource_delete_returns_200_publishes_after_deletion_and_returns_404_on_repeat(string path, string resource)
     {
         SeedResources();
         using var response = await _client.DeleteAsync(path, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
-        Assert.Equal(new[] { $"audit-{resource}:DELETE:existing", "delete:existing" }, _calls);
+        Assert.Equal(new[] { "delete-start:existing", "delete-complete:existing", $"audit-{resource}:DELETE:existing" }, _calls);
         if (resource == "claim")
         {
             Assert.Empty(_claims.Items);
@@ -138,7 +138,7 @@ public class ControllerResponseTests : IDisposable
 
         using var repeated = await _client.DeleteAsync(path, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NotFound, repeated.StatusCode);
-        Assert.Equal(new[] { $"audit-{resource}:DELETE:existing", "delete:existing" }, _calls);
+        Assert.Equal(new[] { "delete-start:existing", "delete-complete:existing", $"audit-{resource}:DELETE:existing" }, _calls);
     }
 
     [Theory]

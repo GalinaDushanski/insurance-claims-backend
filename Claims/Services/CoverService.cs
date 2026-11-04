@@ -40,15 +40,15 @@ public class CoverService : ICoverService
         cover.Id = Guid.NewGuid().ToString();
         cover.Premium = premium;
         await _repository.AddAsync(cover);
-        _auditer.AuditCover(cover.Id, "POST");
+        await _auditer.AuditCoverAsync(cover.Id, "POST");
         return cover;
     }
 
     public async Task DeleteAsync(string id)
     {
         await GetByIdAsync(id);
-        _auditer.AuditCover(id, "DELETE");
         await _repository.DeleteAsync(id);
+        await _auditer.AuditCoverAsync(id, "DELETE");
     }
 
     public decimal ComputePremium(DateTime startDate, DateTime endDate, CoverType coverType)

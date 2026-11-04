@@ -35,15 +35,15 @@ public class ClaimService : IClaimService
         claim.Created = createdUtc;
         claim.Id = Guid.NewGuid().ToString();
         await _repository.AddAsync(claim);
-        _auditer.AuditClaim(claim.Id, "POST");
+        await _auditer.AuditClaimAsync(claim.Id, "POST");
         return claim;
     }
 
     public async Task DeleteAsync(string id)
     {
         await GetByIdAsync(id);
-        _auditer.AuditClaim(id, "DELETE");
         await _repository.DeleteAsync(id);
+        await _auditer.AuditClaimAsync(id, "DELETE");
     }
 
     private async Task<DateTime> ValidateAsync(Claim claim)

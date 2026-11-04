@@ -9,6 +9,8 @@ internal sealed class FakeClaimRepository(List<string> calls) : IClaimRepository
     public TaskCompletionSource? AddCompletion { get; set; }
     public TaskCompletionSource? LookupCompletion { get; set; }
     public Exception? AddFailure { get; set; }
+    public TaskCompletionSource? DeleteCompletion { get; set; }
+    public Exception? DeleteFailure { get; set; }
 
     public Task<IEnumerable<Claim>> GetAllAsync() => Task.FromResult<IEnumerable<Claim>>(Items);
 
@@ -27,11 +29,13 @@ internal sealed class FakeClaimRepository(List<string> calls) : IClaimRepository
         calls.Add("save-complete");
     }
 
-    public Task DeleteAsync(string id)
+    public async Task DeleteAsync(string id)
     {
-        calls.Add($"delete:{id}");
+        calls.Add($"delete-start:{id}");
+        if (DeleteFailure is not null) throw DeleteFailure;
+        if (DeleteCompletion is not null) await DeleteCompletion.Task;
         Items.RemoveAll(item => item.Id == id);
-        return Task.CompletedTask;
+        calls.Add($"delete-complete:{id}");
     }
 }
 
@@ -41,6 +45,8 @@ internal sealed class FakeCoverRepository(List<string> calls) : ICoverRepository
     public TaskCompletionSource? AddCompletion { get; set; }
     public TaskCompletionSource? LookupCompletion { get; set; }
     public Exception? AddFailure { get; set; }
+    public TaskCompletionSource? DeleteCompletion { get; set; }
+    public Exception? DeleteFailure { get; set; }
 
     public Task<IEnumerable<Cover>> GetAllAsync() => Task.FromResult<IEnumerable<Cover>>(Items);
 
@@ -59,27 +65,31 @@ internal sealed class FakeCoverRepository(List<string> calls) : ICoverRepository
         calls.Add("save-complete");
     }
 
-    public Task DeleteAsync(string id)
+    public async Task DeleteAsync(string id)
     {
-        calls.Add($"delete:{id}");
+        calls.Add($"delete-start:{id}");
+        if (DeleteFailure is not null) throw DeleteFailure;
+        if (DeleteCompletion is not null) await DeleteCompletion.Task;
         Items.RemoveAll(item => item.Id == id);
-        return Task.CompletedTask;
+        calls.Add($"delete-complete:{id}");
     }
 }
 
 internal sealed class RecordingAuditer(List<string> calls) : IAuditer
 {
     public Exception? Failure { get; set; }
+    public TaskCompletionSource? PublicationCompletion { get; set; }
 
-    public void AuditClaim(string id, string httpRequestType)
-    {
-        calls.Add($"audit-claim:{httpRequestType}:{id}");
-        if (Failure is not null) throw Failure;
-    }
+    public Task AuditClaimAsync(string id, string httpRequestType, CancellationToken cancellationToken = default) =>
+        RecordAsync($"audit-claim:{httpRequestType}:{id}", cancellationToken);
 
-    public void AuditCover(string id, string httpRequestType)
+    public Task AuditCoverAsync(string id, string httpRequestType, CancellationToken cancellationToken = default) =>
+        RecordAsync($"audit-cover:{httpRequestType}:{id}", cancellationToken);
+
+    private async Task RecordAsync(string call, CancellationToken cancellationToken)
     {
-        calls.Add($"audit-cover:{httpRequestType}:{id}");
+        calls.Add(call);
         if (Failure is not null) throw Failure;
+        if (PublicationCompletion is not null) await PublicationCompletion.Task.WaitAsync(cancellationToken);
     }
 }
