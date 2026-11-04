@@ -35,8 +35,7 @@ public class CoverServiceTests
         Assert.NotEqual(Guid.Empty, firstId);
         Assert.NotEqual(Guid.Empty, secondId);
         Assert.NotEqual(firstId, secondId);
-        // Current one-day yacht result includes three overlapping charges.
-        Assert.Equal(3946.25m, result.Premium);
+        Assert.Equal(1375m, result.Premium);
         Assert.Equal(new DateTime(2030, 1, 1), result.StartDate);
         Assert.Equal(new DateTime(2030, 1, 2), result.EndDate);
         Assert.Equal(CoverType.Yacht, result.Type);

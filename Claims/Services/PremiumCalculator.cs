@@ -4,35 +4,31 @@ public class PremiumCalculator
 {
     public decimal ComputePremium(DateTime startDate, DateTime endDate, CoverType coverType)
     {
-        var multiplier = 1.3m;
-        if (coverType == CoverType.Yacht)
+        if (endDate <= startDate)
+            throw new ArgumentOutOfRangeException(nameof(endDate), "EndDate must be after StartDate.");
+
+        var durationTicks = (endDate - startDate).Ticks;
+        var billableDays = durationTicks / TimeSpan.TicksPerDay;
+        if (durationTicks % TimeSpan.TicksPerDay != 0) billableDays++;
+
+        const decimal baseDailyRate = 1250m;
+        var multiplier = coverType switch
         {
-            multiplier = 1.1m;
-        }
+            CoverType.Yacht => 1.10m,
+            CoverType.PassengerShip => 1.20m,
+            CoverType.Tanker => 1.50m,
+            _ => 1.30m
+        };
+        var dailyRate = baseDailyRate * multiplier;
 
-        if (coverType == CoverType.PassengerShip)
-        {
-            multiplier = 1.2m;
-        }
+        var fullRateDays = Math.Min(billableDays, 30);
+        var middleRateDays = Math.Min(Math.Max(billableDays - 30, 0), 150);
+        var finalRateDays = Math.Max(billableDays - 180, 0);
+        var middleDiscount = coverType == CoverType.Yacht ? 0.05m : 0.02m;
+        var finalDiscount = coverType == CoverType.Yacht ? 0.08m : 0.03m;
 
-        if (coverType == CoverType.Tanker)
-        {
-            multiplier = 1.5m;
-        }
-
-        var premiumPerDay = 1250 * multiplier;
-        var insuranceLength = (endDate - startDate).TotalDays;
-        var totalPremium = 0m;
-
-        for (var i = 0; i < insuranceLength; i++)
-        {
-            if (i < 30) totalPremium += premiumPerDay;
-            if (i < 180 && coverType == CoverType.Yacht) totalPremium += premiumPerDay - premiumPerDay * 0.05m;
-            else if (i < 180) totalPremium += premiumPerDay - premiumPerDay * 0.02m;
-            if (i < 365 && coverType != CoverType.Yacht) totalPremium += premiumPerDay - premiumPerDay * 0.03m;
-            else if (i < 365) totalPremium += premiumPerDay - premiumPerDay * 0.08m;
-        }
-
-        return totalPremium;
+        return dailyRate * fullRateDays
+            + dailyRate * middleRateDays * (1m - middleDiscount)
+            + dailyRate * finalRateDays * (1m - finalDiscount);
     }
 }

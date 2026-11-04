@@ -193,7 +193,7 @@ public class ControllerResponseTests : IDisposable
         Assert.Equal("Yacht", body.GetProperty("type").GetString());
         Assert.Equal(cover.StartDate, body.GetProperty("startDate").GetDateTime());
         Assert.Equal(cover.EndDate, body.GetProperty("endDate").GetDateTime());
-        Assert.Equal(3946.25m, body.GetProperty("premium").GetDecimal());
+        Assert.Equal(1375m, body.GetProperty("premium").GetDecimal());
     }
 
     [Fact]
@@ -204,7 +204,7 @@ public class ControllerResponseTests : IDisposable
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal(3946.25m, await response.Content.ReadFromJsonAsync<decimal>(TestContext.Current.CancellationToken));
+        Assert.Equal(1375m, await response.Content.ReadFromJsonAsync<decimal>(TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -320,7 +320,7 @@ public class ControllerResponseTests : IDisposable
     {
         using var quote = await SendCoverAsync(true, start, end);
         Assert.Equal(HttpStatusCode.OK, quote.StatusCode);
-        Assert.Equal(3946.25m, await quote.Content.ReadFromJsonAsync<decimal>(TestContext.Current.CancellationToken));
+        Assert.Equal(1375m, await quote.Content.ReadFromJsonAsync<decimal>(TestContext.Current.CancellationToken));
         Assert.Empty(_covers.Items);
         Assert.Empty(_calls);
 
@@ -333,7 +333,7 @@ public class ControllerResponseTests : IDisposable
         Assert.Equal(new DateTime(2030, 1, 2, 0, 0, 0, DateTimeKind.Utc), saved.EndDate);
         Assert.Equal(DateTimeKind.Utc, saved.StartDate.Kind);
         Assert.Equal(DateTimeKind.Utc, saved.EndDate.Kind);
-        Assert.Equal(3946.25m, saved.Premium);
+        Assert.Equal(1375m, saved.Premium);
         Assert.Equal("2030-01-01T00:00:00Z", body.GetProperty("startDate").GetString());
         Assert.Equal("2030-01-02T00:00:00Z", body.GetProperty("endDate").GetString());
         Assert.Equal(new[] { "save-start", "save-complete", $"audit-cover:POST:{saved.Id}" }, _calls);
@@ -445,7 +445,7 @@ public class ControllerResponseTests : IDisposable
         });
         _covers.Items.Add(new Cover
         {
-            Id = "existing", Type = CoverType.Yacht, Premium = 3946.25m,
+            Id = "existing", Type = CoverType.Yacht, Premium = 1375m,
             StartDate = new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc),
             EndDate = new DateTime(2030, 1, 2, 0, 0, 0, DateTimeKind.Utc)
         });

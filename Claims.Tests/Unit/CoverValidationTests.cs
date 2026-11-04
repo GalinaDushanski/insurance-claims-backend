@@ -32,10 +32,10 @@ public class CoverValidationTests
             return;
         }
 
-        Assert.Equal(3946.25m, _service.ComputePremium(cover.StartDate, cover.EndDate, cover.Type));
+        Assert.Equal(1375m, _service.ComputePremium(cover.StartDate, cover.EndDate, cover.Type));
         await _service.CreateAsync(cover);
         Assert.Same(cover, Assert.Single(_covers.Items));
-        Assert.Equal(3946.25m, cover.Premium);
+        Assert.Equal(1375m, cover.Premium);
     }
 
     [Theory]
@@ -67,7 +67,7 @@ public class CoverValidationTests
 
         var quotedPremium = _service.ComputePremium(cover.StartDate, cover.EndDate, cover.Type);
 
-        Assert.Equal(3946.25m, quotedPremium);
+        Assert.Equal(1375m, quotedPremium);
         Assert.Empty(_covers.Items);
         Assert.Empty(_calls);
 
@@ -111,7 +111,7 @@ public class CoverValidationTests
     {
         var cover = NewCover(Today, Today.AddDays(1));
         _clock.UtcNow = new DateTimeOffset(Today.AddDays(1).AddTicks(-1));
-        Assert.Equal(3946.25m, _service.ComputePremium(cover.StartDate, cover.EndDate, cover.Type));
+        Assert.Equal(1375m, _service.ComputePremium(cover.StartDate, cover.EndDate, cover.Type));
 
         _clock.UtcNow = new DateTimeOffset(Today.AddDays(1));
 
@@ -142,7 +142,7 @@ public class CoverValidationTests
         Assert.Equal(DateTimeKind.Utc, cover.EndDate.Kind);
         Assert.Equal(Today, cover.StartDate);
         Assert.Equal(Today.AddDays(1), cover.EndDate);
-        Assert.Equal(3946.25m, cover.Premium);
+        Assert.Equal(1375m, cover.Premium);
     }
 
     [Theory]
@@ -172,7 +172,7 @@ public class CoverValidationTests
 
         await _service.CreateAsync(NewCover(start, start.AddDays(1)));
 
-        Assert.Equal(3946.25m, Assert.Single(_covers.Items).Premium);
+        Assert.Equal(1375m, Assert.Single(_covers.Items).Premium);
     }
 
     private async Task<BusinessValidationException> AssertRejectedAsync(Cover cover, string field)

@@ -152,7 +152,7 @@ public class ServiceAuditPublishingTests
         await claimService.GetByIdAsync("claim-id");
         Assert.Single(await coverService.GetAllAsync());
         var cover = await coverService.GetByIdAsync("cover-id");
-        Assert.Equal(3946.25m, coverService.ComputePremium(cover.StartDate, cover.EndDate, cover.Type));
+        Assert.Equal(1375m, coverService.ComputePremium(cover.StartDate, cover.EndDate, cover.Type));
 
         queue.Complete();
         await using var reader = queue.ReadAllAsync(timeout.Token).GetAsyncEnumerator(timeout.Token);
