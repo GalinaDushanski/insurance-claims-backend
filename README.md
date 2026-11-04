@@ -1,14 +1,18 @@
 # Insurance claims backend
 
-A .NET 10 API for creating, reading, and deleting insurance claims and covers.
-Claims and covers are stored in MongoDB; audit records are stored in SQL Server.
+A .NET 10 HTTP API for creating, reading, and deleting insurance claims and covers.
+Claims and covers are stored in MongoDB; a background worker writes audit history
+to SQL Server. This repository implements the five interview tasks and runs locally
+with Docker. Cloud hosting is not required for the demo.
 
 ## Prerequisites and setup
 
-- .NET 10 SDK compatible with `global.json`.
-- A running Docker daemon for the application and Docker-backed tests.
+- A .NET 10 SDK compatible with `global.json`.
+- Docker Desktop or another running Docker daemon. The application and database
+  integration tests start containers automatically; no manual database setup is needed.
+- Access to the MongoDB and SQL Server container images on the first run.
 
-From the repository root:
+Run commands from the repository root:
 
 ```sh
 dotnet restore
@@ -22,19 +26,35 @@ dotnet run --project Claims --launch-profile Claims
 ```
 
 Startup launches MongoDB and SQL Server through Testcontainers and applies the
-existing audit migrations. Swagger is available at
-[https://localhost:7052/swagger](https://localhost:7052/swagger).
-If needed, trust the local HTTPS certificate with `dotnet dev-certs https --trust`.
+existing SQL migrations. The development profile exposes Swagger at
+`https://localhost:7052/swagger`. If the local HTTPS certificate is not trusted,
+run `dotnet dev-certs https --trust`.
+
+The database instances are temporary containers, not an externally managed store.
+Do not rely on their data surviving a new application session.
+
+## Implementation
+
+- **Task 1:** Thin controllers call application services; focused repositories own
+  MongoDB access. Dependencies use constructor injection within one API project.
+- **Task 2:** Services validate claim costs, cover references, and coverage dates.
+  Invalid submissions return 400 field errors; missing resources return 404.
+- **Task 3:** Successful mutations publish audit events to a bounded in-memory
+  queue. A background worker writes SQL records with retries.
+- **Task 4:** Unit tests cover business rules and failure paths, alongside HTTP
+  and database integration tests.
+- **Task 5:** Premium calculation uses three progressive pricing tiers, with
+  explicit partial-day billing and tests for the corrected totals.
 
 ## Run the tests
 
-Docker-free service, validation, premium, and HTTP tests:
+Docker-free service, pricing, component, and in-process HTTP tests:
 
 ```sh
 dotnet test --no-restore --filter-class 'Claims.Tests.Unit.*'
 ```
 
-Docker-backed SQL audit persistence and application smoke tests:
+Docker-backed SQL auditing, MongoDB precision, and application smoke tests:
 
 ```sh
 dotnet test --no-restore --filter-class 'Claims.Tests.Integration.*' --filter-class Claims.Tests.ClaimsControllerTests
@@ -46,30 +66,16 @@ All tests:
 dotnet test --no-restore
 ```
 
-## Validation and responses
+Tests use the Microsoft.Testing.Platform runner configured in `global.json`.
+The `Unit` namespace selects the Docker-free suite, including HTTP/component tests.
 
-Claims require a valid cover, a damage cost from 0 to 100000, and a created
-timestamp within that cover's period. Covers may start today in UTC or later,
-must end after they start, and may last at most one calendar year. The same cover
-rules apply to premium quotes. Send ISO 8601 dates with `Z` or an explicit offset;
-dates without a timezone are interpreted as UTC.
+## Documentation and limitations
 
-Invalid submissions return 400 with field errors. Missing claim or cover GET and
-DELETE requests return 404. See the technical documentation for boundary rules,
-request-model requirements, error examples, and known limitations. Premium
-calculation still preserves the legacy defects pending Task 5.
+Start with the [architecture and reviewer guide](docs/ARCHITECTURE.md) for code
+entry points, date and pricing assumptions, and testing boundaries. The
+[original assignment](docs/README.md) is preserved unchanged.
 
-## Asynchronous auditing
-
-Successful MongoDB writes enqueue audit events for a background SQL writer.
-DELETE now finishes before its audit event is published. Requests wait for queue
-acceptance, not SQL persistence. The queue holds 1000 events and applies
-backpressure when full; failed writes get up to three attempts with 1- and 2-second
-delays. Shutdown attempts to drain the queue until the host deadline. Events are
-in memory and can be lost on crashes or exhausted retries. See the architecture
-document for consistency and shutdown limits.
-
-## Documentation
-
-- [Original assignment](docs/README.md)
-- [Architecture, testing strategy, and limitations](docs/ARCHITECTURE.md)
+Known limitations include audit event loss on crashes, confirmed MongoDB
+sub-millisecond date precision loss, and unresolved dependency security warnings.
+The architecture document explains their impact; the precision tests reproduce
+the limitation rather than fixing it.
