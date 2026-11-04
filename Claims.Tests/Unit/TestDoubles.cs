@@ -8,6 +8,7 @@ internal sealed class FakeClaimRepository(List<string> calls) : IClaimRepository
     public List<Claim> Items { get; } = [];
     public TaskCompletionSource? AddCompletion { get; set; }
     public TaskCompletionSource? LookupCompletion { get; set; }
+    public Exception? LookupFailure { get; set; }
     public Exception? AddFailure { get; set; }
     public TaskCompletionSource? DeleteCompletion { get; set; }
     public Exception? DeleteFailure { get; set; }
@@ -17,6 +18,7 @@ internal sealed class FakeClaimRepository(List<string> calls) : IClaimRepository
     public async Task<Claim?> GetByIdAsync(string id)
     {
         if (LookupCompletion is not null) await LookupCompletion.Task;
+        if (LookupFailure is not null) throw LookupFailure;
         return Items.SingleOrDefault(item => item.Id == id);
     }
 
@@ -44,6 +46,7 @@ internal sealed class FakeCoverRepository(List<string> calls) : ICoverRepository
     public List<Cover> Items { get; } = [];
     public TaskCompletionSource? AddCompletion { get; set; }
     public TaskCompletionSource? LookupCompletion { get; set; }
+    public Exception? LookupFailure { get; set; }
     public Exception? AddFailure { get; set; }
     public TaskCompletionSource? DeleteCompletion { get; set; }
     public Exception? DeleteFailure { get; set; }
@@ -53,6 +56,7 @@ internal sealed class FakeCoverRepository(List<string> calls) : ICoverRepository
     public async Task<Cover?> GetByIdAsync(string id)
     {
         if (LookupCompletion is not null) await LookupCompletion.Task;
+        if (LookupFailure is not null) throw LookupFailure;
         return Items.SingleOrDefault(item => item.Id == id);
     }
 

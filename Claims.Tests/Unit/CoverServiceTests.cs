@@ -115,6 +115,21 @@ public class CoverServiceTests
         Assert.Empty(_calls);
     }
 
+    [Fact]
+    public async Task Delete_propagates_lookup_failure_without_deleting_or_publishing()
+    {
+        var failure = new InvalidOperationException("Lookup failed");
+        _repository.LookupFailure = failure;
+        var item = NewCover();
+        _repository.Items.Add(item);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.DeleteAsync(item.Id));
+
+        Assert.Same(failure, error);
+        Assert.Same(item, Assert.Single(_repository.Items));
+        Assert.Empty(_calls);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

@@ -60,6 +60,27 @@ public class CoverValidationTests
         await AssertRejectedAsync(NewCover(Today, Today.AddTicks(ticksAfterStart)), "endDate");
     }
 
+    [Fact]
+    public async Task End_date_one_tick_after_start_is_valid_for_creation_and_premium_computation()
+    {
+        var cover = NewCover(Today, Today.AddTicks(1));
+
+        var quotedPremium = _service.ComputePremium(cover.StartDate, cover.EndDate, cover.Type);
+
+        Assert.Equal(3946.25m, quotedPremium);
+        Assert.Empty(_covers.Items);
+        Assert.Empty(_calls);
+
+        var result = await _service.CreateAsync(cover);
+
+        Assert.Same(cover, result);
+        Assert.Same(cover, Assert.Single(_covers.Items));
+        Assert.Equal(Today, result.StartDate);
+        Assert.Equal(Today.AddTicks(1), result.EndDate);
+        Assert.Equal(quotedPremium, result.Premium);
+        Assert.Equal(new[] { "save-start", "save-complete", $"audit-cover:POST:{cover.Id}" }, _calls);
+    }
+
     [Theory]
     [InlineData("2030-01-01T12:00:00Z", "2031-01-01T12:00:00Z", true)]
     [InlineData("2030-01-01T12:00:00Z", "2031-01-01T12:00:00.0000001Z", false)]

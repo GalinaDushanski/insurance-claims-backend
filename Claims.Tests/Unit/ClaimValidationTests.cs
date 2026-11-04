@@ -137,6 +137,26 @@ public class ClaimValidationTests
         Assert.Contains("coverId", error.Errors.Keys);
     }
 
+    [Fact]
+    public async Task Create_propagates_cover_lookup_failure_without_mutations_or_side_effects()
+    {
+        var failure = new InvalidOperationException("Cover lookup failed");
+        _covers.LookupFailure = failure;
+        var claim = NewClaim();
+        claim.Created = DateTime.SpecifyKind(claim.Created, DateTimeKind.Unspecified);
+        var originalId = claim.Id;
+        var originalCreated = claim.Created;
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CreateAsync(claim));
+
+        Assert.Same(failure, error);
+        Assert.Equal(originalId, claim.Id);
+        Assert.Equal(originalCreated, claim.Created);
+        Assert.Equal(originalCreated.Kind, claim.Created.Kind);
+        Assert.Empty(_claims.Items);
+        Assert.Empty(_calls);
+    }
+
     private async Task<BusinessValidationException> AssertRejectedAsync(Claim claim, string field)
     {
         var originalId = claim.Id;
