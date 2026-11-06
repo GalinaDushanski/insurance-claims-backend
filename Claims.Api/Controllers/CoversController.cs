@@ -1,4 +1,6 @@
 using Claims.Services;
+using Claims.Api.Contracts;
+using CoverContract = Claims.Api.Contracts.Cover;
 using Claims.ModelBinding;
 using Microsoft.AspNetCore.Mvc;
 
@@ -25,24 +27,24 @@ public class CoversController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Cover>>> GetAsync()
+    public async Task<ActionResult<IEnumerable<CoverContract>>> GetAsync()
     {
         var results = await _coverService.GetAllAsync();
-        return Ok(results);
+        return Ok(results.Select(cover => cover.ToDto()));
     }
 
     [HttpGet("{id}")]
-    public async Task<ActionResult<Cover>> GetAsync(string id)
+    public async Task<ActionResult<CoverContract>> GetAsync(string id)
     {
         var cover = await _coverService.GetByIdAsync(id);
-        return Ok(cover);
+        return Ok(cover.ToDto());
     }
 
     [HttpPost]
-    public async Task<ActionResult> CreateAsync(Cover cover)
+    public async Task<ActionResult> CreateAsync(CoverContract cover)
     {
-        var createdCover = await _coverService.CreateAsync(cover);
-        return Ok(createdCover);
+        var createdCover = await _coverService.CreateAsync(cover.ToDomain());
+        return Ok(createdCover.ToDto());
     }
 
     [HttpDelete("{id}")]

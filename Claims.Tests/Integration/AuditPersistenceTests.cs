@@ -33,7 +33,14 @@ public class AuditPersistenceTests
         services.AddHostedService<AuditWorker>();
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         await using (var setup = provider.CreateAsyncScope())
-            await setup.ServiceProvider.GetRequiredService<AuditContext>().Database.MigrateAsync(timeout.Token);
+        {
+            var context = setup.ServiceProvider.GetRequiredService<AuditContext>();
+            await context.Database.MigrateAsync(timeout.Token);
+            Assert.Equal(new[] { "20220728113129_1stMigration" },
+                await context.Database.GetAppliedMigrationsAsync(timeout.Token));
+            Assert.Empty(await context.Database.GetPendingMigrationsAsync(timeout.Token));
+            Assert.False(context.Database.HasPendingModelChanges());
+        }
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<AuditWorker>());
         await worker.StartAsync(timeout.Token);
         try

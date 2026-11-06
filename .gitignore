@@ -4,6 +4,31 @@
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 .DS_Store
 CHECKLIST.md
+
+# Local environment, credentials, and private keys
+.env
+.env.*
+.aws/
+.azure/
+.netrc
+secrets.json
+*.secrets.json
+credentials.local.json
+credentials.override.json
+appsettings.local.json
+appsettings.*.local.json
+appsettings.override.json
+appsettings.*.override.json
+*.key
+*.pem
+*.p8
+*.p12
+*.ppk
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+
 # User-specific files
 *.suo
 *.user
@@ -29,9 +54,6 @@ bld/
 [Ll]ogs/
 # Data folder
 [Dd]ata/
-!Claims/Data/
-Claims/Data/*
-!Claims/Data/ClaimsContext.cs
 
 # Visual Studio 2015 cache/options directory
 .vs/

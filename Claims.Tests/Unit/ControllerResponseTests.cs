@@ -1,3 +1,4 @@
+using Claims.Api.Contracts;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
@@ -165,7 +166,7 @@ public class ControllerResponseTests : IDisposable
             Id = "client-id", CoverId = "cover-id", Name = "Collision",
             Created = new DateTime(2030, 1, 1), Type = ClaimType.Collision, DamageCost = 42m
         };
-        using var response = await _client.PostAsJsonAsync("/Claims", claim, TestContext.Current.CancellationToken);
+        using var response = await _client.PostAsJsonAsync("/Claims", claim.ToDto(), TestContext.Current.CancellationToken);
         var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -185,7 +186,7 @@ public class ControllerResponseTests : IDisposable
             Id = "client-id", StartDate = new DateTime(2030, 1, 1),
             EndDate = new DateTime(2030, 1, 2), Type = CoverType.Yacht, Premium = -1m
         };
-        using var response = await _client.PostAsJsonAsync("/Covers", cover, TestContext.Current.CancellationToken);
+        using var response = await _client.PostAsJsonAsync("/Covers", cover.ToDto(), TestContext.Current.CancellationToken);
         var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

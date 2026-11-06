@@ -18,7 +18,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Claims\Claims.csproj" />
+    <ProjectReference Include="../Claims.Api/Claims.Api.csproj" />
+    <ProjectReference Include="../Claims.Application/Claims.Application.csproj" />
+    <ProjectReference Include="../Claims.Domain/Claims.Domain.csproj" />
+    <ProjectReference Include="../Claims.Infrastructure/Claims.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

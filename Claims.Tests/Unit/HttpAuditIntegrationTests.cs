@@ -1,3 +1,4 @@
+using Claims.Api.Contracts;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -85,9 +86,9 @@ public class HttpAuditIntegrationTests
             if (operation == "DELETE")
                 request = client.DeleteAsync($"{path}/{(type == AuditEntityType.Claim ? claim.Id : cover.Id)}", timeout.Token);
             else if (type == AuditEntityType.Claim)
-                request = client.PostAsJsonAsync(path, claim, timeout.Token);
+                request = client.PostAsJsonAsync(path, claim.ToDto(), timeout.Token);
             else
-                request = client.PostAsJsonAsync(path, cover, timeout.Token);
+                request = client.PostAsJsonAsync(path, cover.ToDto(), timeout.Token);
 
             var auditEvent = await gate.Started.Task.WaitAsync(timeout.Token);
             using var response = await request.WaitAsync(timeout.Token);

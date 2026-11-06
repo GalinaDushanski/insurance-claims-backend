@@ -6,6 +6,7 @@ using Claims.Validation;
 using Microsoft.EntityFrameworkCore;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using MongoDB.EntityFrameworkCore.Extensions;
 using Xunit;
 using Testcontainers.MongoDb;
 
@@ -42,6 +43,20 @@ public class MongoDateTimePrecisionTests(ITestOutputHelper output)
 
         await using (var saving = new ClaimsContext(options))
         {
+            Assert.Equal("claims", saving.Model.FindEntityType(typeof(Claim))!.GetCollectionName());
+            Assert.Equal("covers", saving.Model.FindEntityType(typeof(Cover))!.GetCollectionName());
+            foreach (var (property, element) in new[]
+                     {
+                         ("Id", "_id"), ("CoverId", "coverId"), ("Created", "created"),
+                         ("Name", "name"), ("Type", "claimType"), ("DamageCost", "damageCost")
+                     })
+                Assert.Equal(element, saving.Model.FindEntityType(typeof(Claim))!.FindProperty(property)!.GetElementName());
+            foreach (var (property, element) in new[]
+                     {
+                         ("Id", "_id"), ("StartDate", "startDate"), ("EndDate", "endDate"),
+                         ("Type", "claimType"), ("Premium", "premium")
+                     })
+                Assert.Equal(element, saving.Model.FindEntityType(typeof(Cover))!.FindProperty(property)!.GetElementName());
             Assert.Equal("startDate", saving.Model.FindEntityType(typeof(Cover))!
                 .FindProperty(nameof(Cover.StartDate))!.GetElementName());
             Assert.Equal("endDate", saving.Model.FindEntityType(typeof(Cover))!
@@ -58,6 +73,16 @@ public class MongoDateTimePrecisionTests(ITestOutputHelper output)
             .Find(new BsonDocument("_id", cover.Id)).SingleAsync(timeout.Token);
         var storedClaim = await database.GetCollection<BsonDocument>("claims")
             .Find(new BsonDocument("_id", claim.Id)).SingleAsync(timeout.Token);
+        Assert.Equal(new[] { "_id", "startDate", "endDate", "claimType", "premium" }.Order(), storedCover.Names.Order());
+        Assert.Equal(new[] { "_id", "coverId", "created", "name", "claimType", "damageCost" }.Order(), storedClaim.Names.Order());
+        Assert.Equal(BsonType.String, storedCover["_id"].BsonType);
+        Assert.Equal(BsonType.String, storedClaim["_id"].BsonType);
+        Assert.Equal(cover.Id, storedClaim["coverId"].AsString);
+        Assert.Equal(claim.Name, storedClaim["name"].AsString);
+        Assert.Equal((int)cover.Type, storedCover["claimType"].AsInt32);
+        Assert.Equal((int)claim.Type, storedClaim["claimType"].AsInt32);
+        Assert.Equal(cover.Premium, storedCover["premium"].AsDecimal);
+        Assert.Equal(claim.DamageCost, storedClaim["damageCost"].AsDecimal);
         await using var reading = new ClaimsContext(options);
         var reloadedCover = await reading.Covers.AsNoTracking().SingleAsync(timeout.Token);
         var reloadedClaim = await reading.Claims.AsNoTracking().SingleAsync(timeout.Token);

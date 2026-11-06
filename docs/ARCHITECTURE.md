@@ -1,162 +1,153 @@
 # Architecture and reviewer guide
 
-## Where to start
+## Architecture and dependencies
 
-- [ClaimService](../Claims/Services/ClaimService.cs) and
-  [CoverService](../Claims/Services/CoverService.cs): validation and mutation ordering.
-- [PremiumCalculator](../Claims/Services/PremiumCalculator.cs) and its
-  [tests](../Claims.Tests/Unit/PremiumCalculatorTests.cs): pricing rules and boundary examples.
-- [AuditWorker](../Claims/Auditing/AuditWorker.cs): retries, scope ownership, and shutdown.
-- [MongoDateTimePrecisionTests](../Claims.Tests/Integration/MongoDateTimePrecisionTests.cs):
-  the confirmed persistence limitation described below.
+Four .NET 10 production projects provide compile-time boundaries within one
+application:
 
-## Structure and dependency injection
+| Project | Responsibility |
+| --- | --- |
+| `Claims.Api` | Controllers, HTTP DTOs/mapping, JSON handling, exception filters, Swagger, composition root |
+| `Claims.Application` | Use cases, validation, repository and audit publisher interfaces |
+| `Claims.Domain` | Plain Claim/Cover entities, enums, deterministic premium calculation |
+| `Claims.Infrastructure` | MongoDB repositories/mappings, SQL audit storage, queue/worker, local database startup |
 
-Controllers bind requests and call services. Services coordinate validation, IDs,
-pricing, repositories, and auditing. Repositories own MongoDB access through
-`ClaimsContext`. Exception filters translate validation and missing-resource
-exceptions into HTTP errors. The API stays in one project with shared request
-and persistence models.
+Arrows show direct project references:
 
-Services, repositories, and `ClaimsContext` are scoped. The stateless calculator,
-`TimeProvider`, audit publisher, and queue are singletons. The hosted worker
-resolves scoped `IAuditWriter` and `AuditContext` instances in a fresh async scope
-per attempt, without capturing request-scoped contexts.
-[Program.cs](../Claims/Program.cs) contains the registrations and Testcontainers startup.
+```text
+Claims.Api            → Claims.Application, Claims.Domain, Claims.Infrastructure
+Claims.Application    → Claims.Domain
+Claims.Infrastructure → Claims.Application, Claims.Domain
+Claims.Domain         → none
+```
 
-Tasks 1–5 preserve mappings and migrations. Earlier setup changed audit model
-nullability and migration metadata relative to the initial repository.
+Domain and Application have no external package or framework references.
+`Claims.Tests` references all four projects. Existing namespaces are retained;
+project membership enforces the boundaries.
+
+[Program.cs](../Claims.Api/Program.cs) composes the application. Its Infrastructure
+reference registers adapters and initializes databases; controllers use Application
+interfaces. Services, repositories, both DbContexts, and the SQL writer are scoped.
+The calculator, clock, audit publisher, and queue are singletons; the worker creates
+a fresh scope per SQL write attempt.
+
+Run `dotnet run --project Claims.Api --launch-profile Claims` from the repository
+root. Docker is required: startup creates temporary MongoDB/SQL Server containers
+and applies migrations. Swagger is at `https://localhost:7052/swagger`.
+
+## SOLID and design decisions
+
+**Single responsibility:** controllers handle HTTP, Application services coordinate
+business operations, Domain owns pricing, and Infrastructure handles persistence
+and audit delivery. [DTO mapping](../Claims.Api/Contracts/ContractMapping.cs) separates
+HTTP contracts from Domain entities. External MongoDB configuration keeps BSON and
+JSON attributes out of Domain.
+
+**Dependency inversion:** Application owns `IClaimRepository`, `ICoverRepository`,
+and `IAuditer`; Infrastructure implements them. Services depend on these
+abstractions, allowing fake or alternate adapters without database dependencies.
+Focused interfaces serve current use cases; the solution does not claim a separate
+implementation of every SOLID principle.
+
+Validation stays in services, shared by cover creation and quoting. Pricing uses
+three explicit tiers rather than a strategy framework; changing rates requires a
+code change. MongoDB maps Domain entities directly, avoiding duplicate document
+models while keeping storage configuration in Infrastructure.
+
+Existing JSON contracts, BSON field names, SQL schemas, and migration history are
+preserved, including string `_id`, `claimType` for both entity types, and migration
+`20220728113129_1stMigration`. DTO names retain Swagger schema IDs `Claim` and `Cover`.
 
 ## Validation and HTTP behavior
 
-Validation finishes before assigning IDs, saving, or publishing audits:
+[ClaimService](../Claims.Application/Services/ClaimService.cs) and
+[CoverService](../Claims.Application/Services/CoverService.cs) validate before
+assigning IDs, saving, or publishing audits:
 
-- Claim `DamageCost` must be between 0 and 100000, inclusive.
-- `CoverId` must be nonblank and identify an existing cover.
-- Claim `Created` must fall within the cover's start/end timestamps, inclusively.
-- Cover `StartDate` must be today in UTC or later; any time today is accepted.
-- `EndDate` must be strictly after `StartDate` and at most `StartDate.AddYears(1)`.
-  The same rules apply to premium quotes.
+- `DamageCost`: 0–100000, inclusive.
+- `CoverId`: nonblank and identifies an existing cover.
+- Claim `Created`: within the cover's exact start/end timestamps, inclusive.
+- Cover `StartDate`: today in UTC or later; any time today is accepted.
+- `EndDate`: strictly after start and no later than `StartDate.AddYears(1)`.
+  Quotes use the same rules. A calendar year can span 366 days; February 29 maps
+  to February 28 in a non-leap year.
 
-Invalid submissions return 400 `ValidationProblemDetails` with field errors.
-A missing referenced cover is a `coverId` error; GET/DELETE of a missing resource
-returns 404 `ProblemDetails`. Successful creates, reads, quotes, and deletes return
-200; deletes have an empty body and empty collections return `[]`.
-Shared models retain implicit required fields: create requests still need an `id`
-placeholder, which the service replaces, and claims require `name`.
+Explicit JSON offsets normalize to UTC; timezone-free input and service
+`Unspecified` values assume UTC. Service `Local` values are rejected. Query parsing
+is invariant; encode positive-offset `+` as `%2B`.
 
-Query parsing uses invariant .NET date parsing and accepts more formats than JSON.
-Encode a positive offset's `+` as `%2B`. The date assumptions and storage precision
-limits are described below.
-
-## Asynchronous auditing
-
-The mutation flow is MongoDB write → queue acceptance → HTTP response. The single
-`AuditWorker` consumes events and writes SQL independently. DELETE now publishes
-only after deletion completes, so a failed deletion does not publish a successful
-audit. Invalid creates, missing resources, and failed MongoDB writes do not publish.
-Reads and premium quotes are not audited. Both POST and DELETE events insert new
-history rows; DELETE never removes audit history.
-
-Events contain entity type, ID, operation, and publication timestamp. Audit dates
-retain local wall-clock time in SQL `datetime2`, unlike UTC business dates; they
-can be ambiguous across timezone or DST changes.
-
-Writes get at most three attempts, with 1- and 2-second delays and a fresh scope
-each time. Failures are logged with event identity and attempt number. Exhausted
-events are abandoned. Shutdown closes publication and attempts to drain accepted
-events until the host deadline cancels processing; SQL cancellation is cooperative.
+Invalid submissions return 400 with field errors. A missing referenced cover is a
+`coverId` validation error; missing-resource GET/DELETE returns 404. Successful
+operations return 200, DELETE has an empty body, and empty lists return `[]`.
+Compatibility retains required create-body `id` placeholders, replaced by generated
+GUIDs, and required claim `name`. Cover premiums are calculated server-side.
 
 ## Premium calculation
 
-The base daily rate is `1250m`, multiplied by 1.10 for Yacht, 1.20 for PassengerShip,
-1.50 for Tanker, and 1.30 for ContainerShip, BulkCarrier, or other enum values.
-Each day belongs to one tier:
+[PremiumCalculator](../Claims.Domain/Services/PremiumCalculator.cs) uses a base daily
+rate of 1250, multiplied by 1.10 for Yacht, 1.20 for PassengerShip, 1.50 for Tanker,
+and 1.30 for ContainerShip, BulkCarrier, or other enum values.
 
-| Days | Yacht rate | Other types rate |
+| Billable days | Yacht rate | Other types rate |
 | --- | --- | --- |
 | 1–30 | 100% | 100% |
 | 31–180 | 95% | 98% |
 | 181 onward | 92% | 97% |
 
-Tier premiums are summed using `decimal` arithmetic.
-For example, a 200-day Yacht costs
+Discounts accumulate as percentage points: 5% + 3% = 8% for Yacht and 2% + 1% = 3%
+for others. Tier totals use `decimal`; a 200-day Yacht costs
 `30 × 1375 + 150 × 1375 × 0.95 + 20 × 1375 × 0.92 = 262487.50`.
 
-There is no 365-day cap: valid 366-day covers charge every day. Direct calls with
-`endDate <= startDate` throw `ArgumentOutOfRangeException`; service validation
-continues to return HTTP 400. No monetary rounding policy or recalculation of
-previously stored premiums was introduced.
+Positive partial 24-hour periods round up, even by one tick. There is no extra
+inclusive end-date charge or 365-day billing cap. No monetary rounding policy or
+recalculation of existing premiums is introduced. Invalid periods return HTTP 400;
+direct calculator calls throw `ArgumentOutOfRangeException`.
 
-## Design decisions, trade-offs, and assumptions
+## Asynchronous auditing
 
-- **Service/repository layering.** Services own business operations and repositories
-  own persistence. This separates responsibilities and lets tests replace database
-  access with fakes, at the cost of additional interfaces and classes. Request and
-  persistence models remain shared, including the create-body `id` requirement.
+The flow is MongoDB mutation → queue acceptance → HTTP response.
+[AuditWorker](../Claims.Infrastructure/Auditing/AuditWorker.cs) writes SQL separately.
+Successful POST/DELETE operations append history rows; DELETE preserves history.
+Reads, quotes, invalid requests, and failed MongoDB operations publish no audit.
 
-- **Service-level validation.** Ordinary checks keep business rules in the services
-  used by both creation and premium quoting, without a validation framework.
-  Field errors are assembled manually; new rules must be maintained alongside
-  their tests and HTTP error mapping.
+The in-memory queue holds 1000 events and waits when full, potentially delaying
+requests. SQL writes receive three attempts with 1- and 2-second retry delays;
+exhausted events are logged and abandoned. Shutdown attempts to drain accepted
+events until the host deadline; SQL cancellation is cooperative.
 
-- **Bounded in-memory auditing.** A shared `Channel<AuditEvent>` with capacity 1000
-  moves SQL persistence out of the request flow without external messaging
-  infrastructure. It waits when full, so backpressure can delay requests.
-  Crashes and shutdown deadlines can lose accepted events; there is no durable replay.
+Delivery is best-effort: crashes or shutdown deadlines can lose events; MongoDB
+writes and enqueueing are not atomic; enqueue failure does not roll back data.
+Ambiguous SQL commits can produce duplicates. There is no durable replay or
+exactly-once guarantee. Existence checks can race with deletion. Audit timestamps
+use local wall-clock `datetime2`, making timezone/DST interpretation ambiguous.
 
-- **Retries without distributed transactions.** Limited retries handle temporary
-  failures while allowing processing to continue after an event is abandoned.
-  Delivery is best-effort: MongoDB writes and audit publication are not atomic,
-  enqueue failure does not roll back data, and ambiguous SQL commits can create
-  duplicate audits. Existence checks also race with concurrent deletion. There is
-  no exactly-once guarantee.
+## Tests and known limitations
 
-- **Fixed pricing tiers.** Three explicit tier calculations make the assignment's
-  formula readable without pricing strategies or configuration infrastructure.
-  Rates and thresholds are defined in code, so pricing changes require a code
-  change and deployment.
+Tests cover validation, pricing boundaries, failure ordering, DTO/JSON mapping,
+project dependencies, and DI lifetimes. Controlled writers demonstrate HTTP
+completion before SQL persistence. Docker-backed tests verify BSON mappings,
+SQL migration history/model consistency, audit rows, and production-host
+Swagger/CRUD behavior.
 
-- **Partial-day billing.** The assignment does not specify partial days. Positive
-  partial elapsed 24-hour periods round up to full billable days, using integer
-  ticks. There is no extra inclusive end-date charge. This is predictable but
-  charges even one tick as a whole day rather than prorating it.
+From the repository root, after `dotnet restore`:
 
-- **Progressive discounts.** “Additional” means cumulative percentage points:
-  Yacht's final discount is 5% + 3% = 8%, and other types receive 2% + 1% = 3%.
-  Compounded percentages would produce different totals and are not used.
+```sh
+# Docker-free unit, component, and HTTP tests
+dotnet test --no-restore --filter-class 'Claims.Tests.Unit.*'
+# Complete suite, including Docker-backed tests
+dotnet test --no-restore
+```
 
-- **Date assumptions.** Business dates use UTC so validation does not depend on
-  the server timezone. Explicit JSON offsets normalize to UTC; timezone-free dates
-  and service `Unspecified` values are assumed UTC, while service `Local` values
-  are rejected. Clients must supply an offset for another timezone. Claim boundaries
-  are inclusive exact timestamps, not whole calendar dates. Cover limits use a
-  calendar-year anniversary: `AddYears(1)` preserves time of day, can span 366 days,
-  and maps February 29 to February 28 in a non-leap year.
+The runner is Microsoft.Testing.Platform, configured in `global.json`.
 
-- **MongoDB precision — confirmed and unfixed.** Existing mappings store
-  `Cover.StartDate`, `Cover.EndDate`, and `Claim.Created` as BSON DateTime with
-  millisecond precision. Retaining those mappings leaves sub-millisecond ticks
-  lost on reload: a one-tick cover becomes a zero-duration cover, and a claim at
-  the original cover end can be rejected against the earlier reloaded boundary.
-  Millisecond-aligned values round-trip exactly in the control test. The current
-  code neither rejects nor normalizes sub-millisecond input; UTC handling does
-  not fix this storage limitation.
+**MongoDB precision:** BSON DateTime loses sub-millisecond ticks on reload. A
+one-tick cover can become zero-duration; a claim at the original end can fail
+against the reloaded boundary. Input is neither rejected nor normalized to storage
+precision. [Precision tests](../Claims.Tests/Integration/MongoDateTimePrecisionTests.cs)
+reproduce this limitation; millisecond-aligned values round-trip exactly.
 
-## Tests and remaining warnings
-
-Unit tests use fake repositories and a fixed clock for validation, operation
-ordering, dependency failures, and independently calculated premium expectations.
-Docker-free HTTP tests exercise MVC binding, filters, and serialization. Controlled
-writers prove responses complete before SQL persistence is released.
-
-Real SQL integration tests verify separate POST/DELETE audit rows and timestamps.
-Real MongoDB tests inspect raw BSON and reload through a new context to demonstrate
-precision loss. The original application smoke test exercises production startup
-and claims-list access; full HTTP CRUD against both databases is not covered.
-See the [README](../README.md#run-the-tests) for commands.
-
-Restore/build reports unresolved NU1902/NU1903 warnings for transitive
+**Dependency warnings:** NU1902/NU1903 remain for transitive
 `System.Security.Cryptography.Pkcs 9.0.11` via `Microsoft.Data.SqlClient`, covering
 Moderate/High denial-of-service advisories. Direct application exploitability has
-not been established.
+not been established. Temporary container data should not be expected to survive
+application restarts.
