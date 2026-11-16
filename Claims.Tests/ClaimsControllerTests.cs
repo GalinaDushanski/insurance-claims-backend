@@ -66,7 +66,7 @@ public class ClaimsControllerTests
         }, token);
         Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
         var error = await invalid.Content.ReadFromJsonAsync<JsonElement>(token);
-        Assert.Equal("DamageCost must be between 0 and 100000, inclusive.",
+        Assert.Equal("DamageCost must be greater than 0 and less than or equal to 100000.",
             error.GetProperty("errors").GetProperty("damageCost")[0].GetString());
 
         using var claimResponse = await client.PostAsJsonAsync("/Claims", new

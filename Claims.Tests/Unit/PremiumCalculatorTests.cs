@@ -110,9 +110,14 @@ public class PremiumCalculatorTests
             _calculator.ComputePremium(Start, Start.AddDays(fullDays).AddTicks(1), type));
     }
 
-    [Fact]
-    public void Unknown_cover_type_preserves_the_other_type_multiplier()
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(99)]
+    public void Undefined_cover_types_are_rejected(int type)
     {
-        Assert.Equal(1625m, _calculator.ComputePremium(Start, Start.AddDays(1), (CoverType)99));
+        var error = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            _calculator.ComputePremium(Start, Start.AddDays(1), (CoverType)type));
+
+        Assert.Equal("coverType", error.ParamName);
     }
 }

@@ -56,8 +56,11 @@ public class ClaimService : IClaimService
     {
         cancellationToken.ThrowIfCancellationRequested();
         var errors = new Dictionary<string, string[]>();
-        if (claim.DamageCost < 0m || claim.DamageCost > 100000m)
-            errors["damageCost"] = ["DamageCost must be between 0 and 100000, inclusive."];
+        if (claim.DamageCost <= 0m || claim.DamageCost > 100000m)
+            errors["damageCost"] = ["DamageCost must be greater than 0 and less than or equal to 100000."];
+
+        if (!Enum.IsDefined(claim.Type))
+            errors["type"] = ["ClaimType must be a defined value."];
 
         var createdUtc = AsUtc(claim.Created);
         if (createdUtc is null)

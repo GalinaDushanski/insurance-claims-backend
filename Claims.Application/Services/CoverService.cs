@@ -35,7 +35,7 @@ public class CoverService : ICoverService
     public async Task<Cover> CreateAsync(Cover cover, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var (startUtc, endUtc) = ValidatePeriod(cover.StartDate, cover.EndDate);
+        var (startUtc, endUtc) = ValidatePeriod(cover.StartDate, cover.EndDate, cover.Type, "type");
         var premium = _premiumCalculator.ComputePremium(startUtc, endUtc, cover.Type);
         cover.StartDate = startUtc;
         cover.EndDate = endUtc;
@@ -60,13 +60,17 @@ public class CoverService : ICoverService
     public decimal ComputePremium(DateTime startDate, DateTime endDate, CoverType coverType, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var (startUtc, endUtc) = ValidatePeriod(startDate, endDate);
+        var (startUtc, endUtc) = ValidatePeriod(startDate, endDate, coverType, "coverType");
         return _premiumCalculator.ComputePremium(startUtc, endUtc, coverType);
     }
 
-    private (DateTime StartUtc, DateTime EndUtc) ValidatePeriod(DateTime startDate, DateTime endDate)
+    private (DateTime StartUtc, DateTime EndUtc) ValidatePeriod(
+        DateTime startDate, DateTime endDate, CoverType coverType, string typeField)
     {
         var errors = new Dictionary<string, string[]>();
+        if (!Enum.IsDefined(coverType))
+            errors[typeField] = ["CoverType must be a defined value."];
+
         var startUtc = AsUtc(startDate);
         var endUtc = AsUtc(endDate);
         var todayUtc = _timeProvider.GetUtcNow().UtcDateTime.Date;

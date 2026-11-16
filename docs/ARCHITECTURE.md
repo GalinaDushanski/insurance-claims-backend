@@ -64,7 +64,8 @@ preserved, including string `_id`, `claimType` for both entity types, and migrat
 [CoverService](../Claims.Application/Services/CoverService.cs) validate before
 assigning IDs, saving, or publishing audits:
 
-- `DamageCost`: 0–100000, inclusive.
+- `DamageCost`: greater than zero and no greater than 100000.
+- `ClaimType` and `CoverType`: defined enum values only, including premium quotes.
 - `CoverId`: nonblank and identifies an existing cover.
 - Claim `Created`: within the cover's exact start/end timestamps, inclusive.
 - Cover `StartDate`: today in UTC or later; any time today is accepted.
@@ -86,7 +87,7 @@ GUIDs, and required claim `name`. Cover premiums are calculated server-side.
 
 [PremiumCalculator](../Claims.Domain/Services/PremiumCalculator.cs) uses a base daily
 rate of 1250, multiplied by 1.10 for Yacht, 1.20 for PassengerShip, 1.50 for Tanker,
-and 1.30 for ContainerShip, BulkCarrier, or other enum values.
+and 1.30 for ContainerShip or BulkCarrier. Undefined enum values are rejected.
 
 | Billable days | Yacht rate | Other types rate |
 | --- | --- | --- |

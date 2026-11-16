@@ -22,11 +22,11 @@ public class ClaimValidationTests
     }
 
     [Theory]
-    [InlineData("0")]
+    [InlineData("0.0000000000000000000000000001")]
     [InlineData("0.01")]
     [InlineData("99999.99")]
     [InlineData("100000")]
-    public async Task Costs_within_inclusive_limits_are_accepted(string cost)
+    public async Task Positive_costs_up_to_and_including_the_maximum_are_accepted(string cost)
     {
         var claim = NewClaim();
         claim.DamageCost = decimal.Parse(cost, CultureInfo.InvariantCulture);
@@ -39,6 +39,7 @@ public class ClaimValidationTests
     }
 
     [Theory]
+    [InlineData("0")]
     [InlineData("-0.01")]
     [InlineData("-1")]
     [InlineData("100000.01")]
@@ -48,6 +49,33 @@ public class ClaimValidationTests
         claim.DamageCost = decimal.Parse(cost, CultureInfo.InvariantCulture);
 
         await AssertRejectedAsync(claim, "damageCost");
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(99)]
+    public async Task Undefined_claim_types_are_rejected_without_side_effects(int type)
+    {
+        var claim = NewClaim();
+        claim.Type = (ClaimType)type;
+
+        await AssertRejectedAsync(claim, "type");
+    }
+
+    [Theory]
+    [InlineData(ClaimType.Collision)]
+    [InlineData(ClaimType.Grounding)]
+    [InlineData(ClaimType.BadWeather)]
+    [InlineData(ClaimType.Fire)]
+    public async Task Defined_claim_types_are_accepted(ClaimType type)
+    {
+        var claim = NewClaim();
+        claim.Type = type;
+
+        var result = await _service.CreateAsync(claim, TestContext.Current.CancellationToken);
+
+        Assert.Equal(type, result.Type);
+        Assert.Same(claim, Assert.Single(_claims.Items));
     }
 
     [Theory]
@@ -130,11 +158,13 @@ public class ClaimValidationTests
     {
         var claim = NewClaim();
         claim.DamageCost = -1m;
+        claim.Type = (ClaimType)99;
         claim.CoverId = "missing";
 
         var error = await AssertRejectedAsync(claim, "damageCost");
 
         Assert.Contains("coverId", error.Errors.Keys);
+        Assert.Contains("type", error.Errors.Keys);
     }
 
     [Fact]

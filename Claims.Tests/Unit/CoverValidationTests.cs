@@ -21,6 +21,36 @@ public class CoverValidationTests
 
     [Theory]
     [InlineData(-1)]
+    [InlineData(99)]
+    public async Task Undefined_cover_types_are_rejected_for_creation_and_quotes_without_side_effects(int type)
+    {
+        var cover = NewCover(Today, Today.AddDays(1));
+        cover.Type = (CoverType)type;
+
+        await AssertRejectedAsync(cover, "type");
+    }
+
+    [Theory]
+    [InlineData(CoverType.Yacht, 1375)]
+    [InlineData(CoverType.PassengerShip, 1500)]
+    [InlineData(CoverType.ContainerShip, 1625)]
+    [InlineData(CoverType.BulkCarrier, 1625)]
+    [InlineData(CoverType.Tanker, 1875)]
+    public async Task Defined_cover_types_are_accepted_for_creation_and_quotes(CoverType type, int premium)
+    {
+        var cover = NewCover(Today, Today.AddDays(1));
+        cover.Type = type;
+
+        Assert.Equal(premium, _service.ComputePremium(Today, Today.AddDays(1), type, TestContext.Current.CancellationToken));
+        var created = await _service.CreateAsync(cover, TestContext.Current.CancellationToken);
+
+        Assert.Equal(type, created.Type);
+        Assert.Equal(premium, created.Premium);
+        Assert.Same(cover, Assert.Single(_covers.Items));
+    }
+
+    [Theory]
+    [InlineData(-1)]
     [InlineData(0)]
     [InlineData(1)]
     public async Task Start_date_uses_today_in_utc_including_today_and_tomorrow(int daysFromToday)
@@ -160,9 +190,12 @@ public class CoverValidationTests
     [Fact]
     public async Task Invalid_creation_reports_multiple_errors_and_preserves_all_submitted_values()
     {
-        var error = await AssertRejectedAsync(NewCover(Today.AddDays(-1), Today.AddDays(-2)), "startDate");
+        var cover = NewCover(Today.AddDays(-1), Today.AddDays(-2));
+        cover.Type = (CoverType)99;
+        var error = await AssertRejectedAsync(cover, "startDate");
 
         Assert.Contains("endDate", error.Errors.Keys);
+        Assert.Contains("type", error.Errors.Keys);
     }
 
     [Fact]
@@ -186,9 +219,11 @@ public class CoverValidationTests
         var createError = await Assert.ThrowsAsync<BusinessValidationException>(() => _service.CreateAsync(cover, TestContext.Current.CancellationToken));
 
         Assert.Contains(field, createError.Errors.Keys);
-        Assert.Equal(computeError.Errors.Keys.Order(), createError.Errors.Keys.Order());
+        var computeErrors = computeError.Errors.ToDictionary(
+            error => error.Key == "coverType" ? "type" : error.Key, error => error.Value);
+        Assert.Equal(computeErrors.Keys.Order(), createError.Errors.Keys.Order());
         foreach (var key in createError.Errors.Keys)
-            Assert.Equal(computeError.Errors[key], createError.Errors[key]);
+            Assert.Equal(computeErrors[key], createError.Errors[key]);
         Assert.Equal(id, cover.Id);
         Assert.Equal(start, cover.StartDate);
         Assert.Equal(start.Kind, cover.StartDate.Kind);

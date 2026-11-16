@@ -259,6 +259,92 @@ public class ControllerResponseTests : IDisposable
     }
 
     [Theory]
+    [InlineData("/Claims", 99)]
+    [InlineData("/Claims", -1)]
+    [InlineData("/Claims", "99")]
+    [InlineData("/Covers", 99)]
+    [InlineData("/Covers", -1)]
+    [InlineData("/Covers", "99")]
+    public async Task Undefined_resource_types_return_400_with_field_errors_without_side_effects(string path, object type)
+    {
+        if (path == "/Claims")
+            _covers.Items.Add(new Cover
+            {
+                Id = "cover-id", StartDate = new DateTime(2030, 1, 1), EndDate = new DateTime(2030, 1, 2)
+            });
+        object payload = path == "/Claims"
+            ? new
+            {
+                Id = "client-id", CoverId = "cover-id", Name = "Collision", Created = "2030-01-01",
+                Type = type, DamageCost = 42m
+            }
+            : new
+            {
+                Id = "client-id", StartDate = "2030-01-01", EndDate = "2030-01-02", Type = type, Premium = -1m
+            };
+        using var response = await _client.PostAsJsonAsync(path, payload, TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(400, body.GetProperty("status").GetInt32());
+        Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("errors").GetProperty("type")[0].GetString()));
+        Assert.Empty(_claims.Items);
+        Assert.Equal(path == "/Claims" ? 1 : 0, _covers.Items.Count);
+        Assert.Empty(_calls);
+    }
+
+    [Theory]
+    [InlineData("99")]
+    [InlineData("-1")]
+    [InlineData("Undefined")]
+    public async Task Invalid_compute_type_returns_400_with_query_field_error_without_side_effects(string type)
+    {
+        using var response = await _client.GetAsync(
+            $"/Covers/compute?startDate=2030-01-01&endDate=2030-01-02&coverType={type}",
+            TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(400, body.GetProperty("status").GetInt32());
+        Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("errors").GetProperty("coverType")[0].GetString()));
+        Assert.Empty(_covers.Items);
+        Assert.Empty(_calls);
+    }
+
+    [Theory]
+    [InlineData("/Claims", 0, "Collision")]
+    [InlineData("/Claims", 3, "Fire")]
+    [InlineData("/Covers", 0, "Yacht")]
+    [InlineData("/Covers", 4, "Tanker")]
+    public async Task Defined_numeric_resource_types_preserve_201_and_string_enum_response(string path, int type, string expected)
+    {
+        if (path == "/Claims")
+            _covers.Items.Add(new Cover
+            {
+                Id = "cover-id", StartDate = new DateTime(2030, 1, 1), EndDate = new DateTime(2030, 1, 2)
+            });
+        object payload = path == "/Claims"
+            ? new
+            {
+                Id = "client-id", CoverId = "cover-id", Name = "Claim", Created = "2030-01-01",
+                Type = type, DamageCost = 100000m
+            }
+            : new
+            {
+                Id = "client-id", StartDate = "2030-01-01", EndDate = "2030-01-02", Type = type, Premium = -1m
+            };
+        using var response = await _client.PostAsJsonAsync(path, payload, TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(expected, body.GetProperty("type").GetString());
+        await AssertCreatedLocationAsync(response, path, body);
+    }
+
+    [Theory]
+    [InlineData(0, "cover-id", "2030-01-01T00:00:00Z", "damageCost")]
     [InlineData(-1, "cover-id", "2030-01-01T00:00:00Z", "damageCost")]
     [InlineData(100001, "cover-id", "2030-01-01T00:00:00Z", "damageCost")]
     [InlineData(42, "missing", "2030-01-01T00:00:00Z", "coverId")]

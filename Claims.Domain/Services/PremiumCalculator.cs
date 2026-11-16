@@ -7,6 +7,9 @@ public class PremiumCalculator
         if (endDate <= startDate)
             throw new ArgumentOutOfRangeException(nameof(endDate), "EndDate must be after StartDate.");
 
+        if (!Enum.IsDefined(coverType))
+            throw new ArgumentOutOfRangeException(nameof(coverType), "CoverType must be a defined value.");
+
         var durationTicks = (endDate - startDate).Ticks;
         var billableDays = durationTicks / TimeSpan.TicksPerDay;
         if (durationTicks % TimeSpan.TicksPerDay != 0) billableDays++;
