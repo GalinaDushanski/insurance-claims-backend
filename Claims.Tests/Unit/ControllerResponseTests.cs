@@ -61,6 +61,42 @@ public class ControllerResponseTests : IDisposable
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Client_cancellation_reaches_the_inflight_repository_lookup(bool cover)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
+        var started = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (cover)
+        {
+            _covers.LookupStarted = started;
+            _covers.LookupCompletion = gate;
+        }
+        else
+        {
+            _claims.LookupStarted = started;
+            _claims.LookupCompletion = gate;
+        }
+
+        var request = _client.GetAsync(cover ? "/Covers/existing" : "/Claims/existing", cancellation.Token);
+        var repositoryToken = await started.Task.WaitAsync(timeout.Token);
+        Assert.True(repositoryToken.CanBeCanceled);
+        var aborted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var registration = repositoryToken.Register(() => aborted.TrySetResult());
+
+        await cancellation.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => request);
+        await aborted.Task.WaitAsync(timeout.Token);
+        Assert.True(repositoryToken.IsCancellationRequested);
+        Assert.False(gate.Task.IsCompleted);
+        Assert.Empty(_calls);
+    }
+
+    [Theory]
     [InlineData("/Claims/missing", "Claim")]
     [InlineData("/Covers/missing", "Cover")]
     public async Task Missing_resource_get_returns_404_without_side_effects(string path, string resource)

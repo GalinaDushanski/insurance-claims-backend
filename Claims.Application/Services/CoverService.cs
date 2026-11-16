@@ -7,6 +7,7 @@ namespace Claims.Services;
 
 public class CoverService : ICoverService
 {
+    private static readonly TimeSpan AuditEnqueueTimeout = TimeSpan.FromSeconds(5);
     private readonly ICoverRepository _repository;
     private readonly IAuditer _auditer;
     private readonly PremiumCalculator _premiumCalculator;
@@ -20,39 +21,45 @@ public class CoverService : ICoverService
         _timeProvider = timeProvider;
     }
 
-    public Task<IEnumerable<Cover>> GetAllAsync()
+    public Task<IEnumerable<Cover>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        return _repository.GetAllAsync();
+        return _repository.GetAllAsync(cancellationToken);
     }
 
-    public async Task<Cover> GetByIdAsync(string id)
+    public async Task<Cover> GetByIdAsync(string id, CancellationToken cancellationToken = default)
     {
-        return await _repository.GetByIdAsync(id)
+        return await _repository.GetByIdAsync(id, cancellationToken)
             ?? throw new ResourceNotFoundException("Cover", id);
     }
 
-    public async Task<Cover> CreateAsync(Cover cover)
+    public async Task<Cover> CreateAsync(Cover cover, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var (startUtc, endUtc) = ValidatePeriod(cover.StartDate, cover.EndDate);
         var premium = _premiumCalculator.ComputePremium(startUtc, endUtc, cover.Type);
         cover.StartDate = startUtc;
         cover.EndDate = endUtc;
         cover.Id = Guid.NewGuid().ToString();
         cover.Premium = premium;
-        await _repository.AddAsync(cover);
-        await _auditer.AuditCoverAsync(cover.Id, "POST");
+        await _repository.AddAsync(cover, cancellationToken);
+        // Persistence succeeded: client cancellation must not interrupt audit acceptance.
+        using var auditTimeout = new CancellationTokenSource(AuditEnqueueTimeout);
+        await _auditer.AuditCoverAsync(cover.Id, "POST", auditTimeout.Token);
         return cover;
     }
 
-    public async Task DeleteAsync(string id)
+    public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)
     {
-        await GetByIdAsync(id);
-        await _repository.DeleteAsync(id);
-        await _auditer.AuditCoverAsync(id, "DELETE");
+        await GetByIdAsync(id, cancellationToken);
+        await _repository.DeleteAsync(id, cancellationToken);
+        // Persistence succeeded: client cancellation must not interrupt audit acceptance.
+        using var auditTimeout = new CancellationTokenSource(AuditEnqueueTimeout);
+        await _auditer.AuditCoverAsync(id, "DELETE", auditTimeout.Token);
     }
 
-    public decimal ComputePremium(DateTime startDate, DateTime endDate, CoverType coverType)
+    public decimal ComputePremium(DateTime startDate, DateTime endDate, CoverType coverType, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var (startUtc, endUtc) = ValidatePeriod(startDate, endDate);
         return _premiumCalculator.ComputePremium(startUtc, endUtc, coverType);
     }

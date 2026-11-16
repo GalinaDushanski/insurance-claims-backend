@@ -54,12 +54,12 @@ public class ServiceAuditPublishingTests
                 if (type == AuditEntityType.Claim)
                 {
                     var service = requestScope.ServiceProvider.GetRequiredService<IClaimService>();
-                    requestOperation = operation == "POST" ? service.CreateAsync(claim) : service.DeleteAsync(claim.Id);
+                    requestOperation = operation == "POST" ? service.CreateAsync(claim, timeout.Token) : service.DeleteAsync(claim.Id, timeout.Token);
                 }
                 else
                 {
                     var service = requestScope.ServiceProvider.GetRequiredService<ICoverService>();
-                    requestOperation = operation == "POST" ? service.CreateAsync(cover) : service.DeleteAsync(cover.Id);
+                    requestOperation = operation == "POST" ? service.CreateAsync(cover, timeout.Token) : service.DeleteAsync(cover.Id, timeout.Token);
                 }
 
                 var auditEvent = await gate.Started.Task.WaitAsync(timeout.Token);
@@ -119,14 +119,14 @@ public class ServiceAuditPublishingTests
                 claims.Items.Add(claim);
                 claims.DeleteFailure = failure;
             }
-            requestOperation = operation == "POST" ? service.CreateAsync(claim) : service.DeleteAsync(claim.Id);
+            requestOperation = operation == "POST" ? service.CreateAsync(claim, timeout.Token) : service.DeleteAsync(claim.Id, timeout.Token);
         }
         else
         {
             var service = new CoverService(covers, auditer, new PremiumCalculator(), NewClock());
             if (operation == "POST") covers.AddFailure = failure;
             else covers.DeleteFailure = failure;
-            requestOperation = operation == "POST" ? service.CreateAsync(NewCover()) : service.DeleteAsync(cover.Id);
+            requestOperation = operation == "POST" ? service.CreateAsync(NewCover(), timeout.Token) : service.DeleteAsync(cover.Id, timeout.Token);
         }
 
         Assert.Same(failure, await Assert.ThrowsAsync<InvalidOperationException>(() => requestOperation));
@@ -148,15 +148,118 @@ public class ServiceAuditPublishingTests
         var claimService = new ClaimService(claims, auditer, covers);
         var coverService = new CoverService(covers, auditer, new PremiumCalculator(), NewClock());
 
-        Assert.Single(await claimService.GetAllAsync());
-        await claimService.GetByIdAsync("claim-id");
-        Assert.Single(await coverService.GetAllAsync());
-        var cover = await coverService.GetByIdAsync("cover-id");
-        Assert.Equal(1375m, coverService.ComputePremium(cover.StartDate, cover.EndDate, cover.Type));
+        Assert.Single(await claimService.GetAllAsync(timeout.Token));
+        await claimService.GetByIdAsync("claim-id", timeout.Token);
+        Assert.Single(await coverService.GetAllAsync(timeout.Token));
+        var cover = await coverService.GetByIdAsync("cover-id", timeout.Token);
+        Assert.Equal(1375m, coverService.ComputePremium(cover.StartDate, cover.EndDate, cover.Type, timeout.Token));
 
         queue.Complete();
         await using var reader = queue.ReadAllAsync(timeout.Token).GetAsyncEnumerator(timeout.Token);
         Assert.False(await reader.MoveNextAsync());
+    }
+
+    [Theory]
+    [InlineData(AuditEntityType.Claim, "POST", "before-enqueue")]
+    [InlineData(AuditEntityType.Claim, "DELETE", "before-enqueue")]
+    [InlineData(AuditEntityType.Cover, "POST", "before-enqueue")]
+    [InlineData(AuditEntityType.Cover, "DELETE", "before-enqueue")]
+    [InlineData(AuditEntityType.Claim, "POST", "during-enqueue")]
+    [InlineData(AuditEntityType.Claim, "DELETE", "during-enqueue")]
+    [InlineData(AuditEntityType.Cover, "POST", "during-enqueue")]
+    [InlineData(AuditEntityType.Cover, "DELETE", "during-enqueue")]
+    [InlineData(AuditEntityType.Claim, "POST", "timeout")]
+    [InlineData(AuditEntityType.Claim, "DELETE", "timeout")]
+    [InlineData(AuditEntityType.Cover, "POST", "timeout")]
+    [InlineData(AuditEntityType.Cover, "DELETE", "timeout")]
+    public async Task Persisted_mutation_enqueues_despite_client_cancellation_or_reports_independent_timeout(
+        AuditEntityType type, string operation, string cancellationStage)
+    {
+        using var timeout = CreateTimeout();
+        using var requestCancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var queue = new AuditQueue();
+        var filler = new AuditEvent(AuditEntityType.Claim, "buffered", "POST", NewClock().GetLocalNow().DateTime);
+        for (var index = 0; index < 1000; index++)
+            await queue.EnqueueAsync(filler, timeout.Token);
+
+        var claims = new FakeClaimRepository([]);
+        var covers = new FakeCoverRepository([]);
+        var claim = NewClaim();
+        var cover = NewCover();
+        if (type == AuditEntityType.Claim) covers.Items.Add(cover);
+        if (operation == "DELETE")
+        {
+            if (type == AuditEntityType.Claim) claims.Items.Add(claim);
+            else covers.Items.Add(cover);
+        }
+        // Cancel precisely after the mutation, before control returns to the service.
+        if (cancellationStage == "before-enqueue")
+        {
+            if (type == AuditEntityType.Claim) claims.AfterPersistence = requestCancellation.Cancel;
+            else covers.AfterPersistence = requestCancellation.Cancel;
+        }
+        var auditer = new Auditer(queue, NewClock());
+        Task mutation;
+        if (type == AuditEntityType.Claim)
+        {
+            var service = new ClaimService(claims, auditer, covers);
+            mutation = operation == "POST"
+                ? service.CreateAsync(claim, requestCancellation.Token)
+                : service.DeleteAsync(claim.Id, requestCancellation.Token);
+        }
+        else
+        {
+            var service = new CoverService(covers, auditer, new PremiumCalculator(), NewClock());
+            mutation = operation == "POST"
+                ? service.CreateAsync(cover, requestCancellation.Token)
+                : service.DeleteAsync(cover.Id, requestCancellation.Token);
+        }
+
+        Assert.False(mutation.IsCompleted);
+        if (type == AuditEntityType.Claim)
+        {
+            if (operation == "DELETE") Assert.Empty(claims.Items);
+            else Assert.Same(claim, Assert.Single(claims.Items));
+        }
+        else
+        {
+            if (operation == "DELETE") Assert.Empty(covers.Items);
+            else Assert.Same(cover, Assert.Single(covers.Items));
+        }
+        Assert.All(claims.Tokens.Concat(covers.Tokens), token => Assert.Equal(requestCancellation.Token, token));
+        await requestCancellation.CancelAsync();
+
+        if (cancellationStage == "timeout")
+        {
+            var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => mutation.WaitAsync(timeout.Token));
+            Assert.NotEqual(requestCancellation.Token, error.CancellationToken);
+            Assert.NotEqual(timeout.Token, error.CancellationToken);
+            Assert.True(error.CancellationToken.IsCancellationRequested);
+            queue.Complete();
+            var count = 0;
+            await foreach (var item in queue.ReadAllAsync(timeout.Token))
+            {
+                Assert.Same(filler, item);
+                count++;
+            }
+            Assert.Equal(1000, count);
+        }
+        else
+        {
+            // Free capacity only after the request has been cancelled.
+            await using var reader = queue.ReadAllAsync(timeout.Token).GetAsyncEnumerator(timeout.Token);
+            Assert.True(await reader.MoveNextAsync());
+            Assert.Same(filler, reader.Current);
+            await mutation.WaitAsync(timeout.Token);
+            queue.Complete();
+            var published = new List<AuditEvent>();
+            while (await reader.MoveNextAsync())
+                if (reader.Current.EntityId != "buffered") published.Add(reader.Current);
+            var auditEvent = Assert.Single(published);
+            Assert.Equal(type, auditEvent.EntityType);
+            Assert.Equal(operation, auditEvent.HttpRequestType);
+            Assert.Equal(type == AuditEntityType.Claim ? claim.Id : cover.Id, auditEvent.EntityId);
+        }
     }
 
     private sealed class WriterGate

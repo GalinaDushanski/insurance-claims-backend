@@ -21,36 +21,37 @@ public class CoversController : ControllerBase
     public async Task<ActionResult> ComputePremiumAsync(
         [FromQuery, ModelBinder(BinderType = typeof(UtcDateTimeModelBinder))] DateTime startDate,
         [FromQuery, ModelBinder(BinderType = typeof(UtcDateTimeModelBinder))] DateTime endDate,
-        [FromQuery] CoverType coverType)
+        [FromQuery] CoverType coverType,
+        CancellationToken cancellationToken)
     {
-        return Ok(_coverService.ComputePremium(startDate, endDate, coverType));
+        return Ok(_coverService.ComputePremium(startDate, endDate, coverType, cancellationToken));
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<CoverContract>>> GetAsync()
+    public async Task<ActionResult<IEnumerable<CoverContract>>> GetAsync(CancellationToken cancellationToken)
     {
-        var results = await _coverService.GetAllAsync();
+        var results = await _coverService.GetAllAsync(cancellationToken);
         return Ok(results.Select(cover => cover.ToDto()));
     }
 
     [HttpGet("{id}")]
-    public async Task<ActionResult<CoverContract>> GetAsync(string id)
+    public async Task<ActionResult<CoverContract>> GetAsync(string id, CancellationToken cancellationToken)
     {
-        var cover = await _coverService.GetByIdAsync(id);
+        var cover = await _coverService.GetByIdAsync(id, cancellationToken);
         return Ok(cover.ToDto());
     }
 
     [HttpPost]
-    public async Task<ActionResult> CreateAsync(CoverContract cover)
+    public async Task<ActionResult> CreateAsync(CoverContract cover, CancellationToken cancellationToken)
     {
-        var createdCover = await _coverService.CreateAsync(cover.ToDomain());
+        var createdCover = await _coverService.CreateAsync(cover.ToDomain(), cancellationToken);
         return CreatedAtAction("Get", new { id = createdCover.Id }, createdCover.ToDto());
     }
 
     [HttpDelete("{id}")]
-    public async Task<ActionResult> DeleteAsync(string id)
+    public async Task<ActionResult> DeleteAsync(string id, CancellationToken cancellationToken)
     {
-        await _coverService.DeleteAsync(id);
+        await _coverService.DeleteAsync(id, cancellationToken);
         return NoContent();
     }
 }

@@ -17,29 +17,29 @@ namespace Claims.Controllers
         }
 
         [HttpGet]
-        public async Task<IEnumerable<ClaimContract>> GetAsync()
+        public async Task<IEnumerable<ClaimContract>> GetAsync(CancellationToken cancellationToken)
         {
-            return (await _claimService.GetAllAsync()).Select(claim => claim.ToDto());
+            return (await _claimService.GetAllAsync(cancellationToken)).Select(claim => claim.ToDto());
         }
 
         [HttpPost]
-        public async Task<ActionResult> CreateAsync(ClaimContract claim)
+        public async Task<ActionResult> CreateAsync(ClaimContract claim, CancellationToken cancellationToken)
         {
-            var createdClaim = await _claimService.CreateAsync(claim.ToDomain());
+            var createdClaim = await _claimService.CreateAsync(claim.ToDomain(), cancellationToken);
             return CreatedAtAction("Get", new { id = createdClaim.Id }, createdClaim.ToDto());
         }
 
         [HttpDelete("{id}")]
-        public async Task<ActionResult> DeleteAsync(string id)
+        public async Task<ActionResult> DeleteAsync(string id, CancellationToken cancellationToken)
         {
-            await _claimService.DeleteAsync(id);
+            await _claimService.DeleteAsync(id, cancellationToken);
             return NoContent();
         }
 
         [HttpGet("{id}")]
-        public async Task<ClaimContract> GetAsync(string id)
+        public async Task<ClaimContract> GetAsync(string id, CancellationToken cancellationToken)
         {
-            return (await _claimService.GetByIdAsync(id)).ToDto();
+            return (await _claimService.GetByIdAsync(id, cancellationToken)).ToDto();
         }
     }
 }

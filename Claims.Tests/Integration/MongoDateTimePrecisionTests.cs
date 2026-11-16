@@ -110,7 +110,7 @@ public class MongoDateTimePrecisionTests(ITestOutputHelper output)
         };
         if (claim.Created.Ticks % TimeSpan.TicksPerMillisecond != 0)
         {
-            var error = await Assert.ThrowsAsync<BusinessValidationException>(() => service.CreateAsync(submission));
+            var error = await Assert.ThrowsAsync<BusinessValidationException>(() => service.CreateAsync(submission, timeout.Token));
             Assert.Contains("created", error.Errors.Keys);
             Assert.Equal("client-id", submission.Id);
             Assert.Equal(claim.Created.Ticks, submission.Created.Ticks);
@@ -119,7 +119,7 @@ public class MongoDateTimePrecisionTests(ITestOutputHelper output)
         }
         else
         {
-            await service.CreateAsync(submission);
+            await service.CreateAsync(submission, timeout.Token);
             Assert.Equal(2, await reading.Claims.CountAsync(timeout.Token));
             Assert.Equal($"audit-claim:POST:{submission.Id}", Assert.Single(calls));
         }

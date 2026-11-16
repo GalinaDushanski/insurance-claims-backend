@@ -32,8 +32,8 @@ public class CoverValidationTests
             return;
         }
 
-        Assert.Equal(1375m, _service.ComputePremium(cover.StartDate, cover.EndDate, cover.Type));
-        await _service.CreateAsync(cover);
+        Assert.Equal(1375m, _service.ComputePremium(cover.StartDate, cover.EndDate, cover.Type, TestContext.Current.CancellationToken));
+        await _service.CreateAsync(cover, TestContext.Current.CancellationToken);
         Assert.Same(cover, Assert.Single(_covers.Items));
         Assert.Equal(1375m, cover.Premium);
     }
@@ -47,7 +47,7 @@ public class CoverValidationTests
         _clock.UtcNow = new DateTimeOffset(Today.AddHours(23).AddMinutes(59));
         var start = Today.AddHours(hour);
 
-        await _service.CreateAsync(NewCover(start, start.AddDays(1)));
+        await _service.CreateAsync(NewCover(start, start.AddDays(1)), TestContext.Current.CancellationToken);
 
         Assert.Single(_covers.Items);
     }
@@ -65,13 +65,13 @@ public class CoverValidationTests
     {
         var cover = NewCover(Today, Today.AddTicks(1));
 
-        var quotedPremium = _service.ComputePremium(cover.StartDate, cover.EndDate, cover.Type);
+        var quotedPremium = _service.ComputePremium(cover.StartDate, cover.EndDate, cover.Type, TestContext.Current.CancellationToken);
 
         Assert.Equal(1375m, quotedPremium);
         Assert.Empty(_covers.Items);
         Assert.Empty(_calls);
 
-        var result = await _service.CreateAsync(cover);
+        var result = await _service.CreateAsync(cover, TestContext.Current.CancellationToken);
 
         Assert.Same(cover, result);
         Assert.Same(cover, Assert.Single(_covers.Items));
@@ -99,8 +99,8 @@ public class CoverValidationTests
             return;
         }
 
-        var quotedPremium = _service.ComputePremium(cover.StartDate, cover.EndDate, cover.Type);
-        await _service.CreateAsync(cover);
+        var quotedPremium = _service.ComputePremium(cover.StartDate, cover.EndDate, cover.Type, TestContext.Current.CancellationToken);
+        await _service.CreateAsync(cover, TestContext.Current.CancellationToken);
 
         Assert.Same(cover, Assert.Single(_covers.Items));
         Assert.Equal(quotedPremium, cover.Premium);
@@ -111,7 +111,7 @@ public class CoverValidationTests
     {
         var cover = NewCover(Today, Today.AddDays(1));
         _clock.UtcNow = new DateTimeOffset(Today.AddDays(1).AddTicks(-1));
-        Assert.Equal(1375m, _service.ComputePremium(cover.StartDate, cover.EndDate, cover.Type));
+        Assert.Equal(1375m, _service.ComputePremium(cover.StartDate, cover.EndDate, cover.Type, TestContext.Current.CancellationToken));
 
         _clock.UtcNow = new DateTimeOffset(Today.AddDays(1));
 
@@ -124,7 +124,7 @@ public class CoverValidationTests
         _clock.UtcNow = new DateTimeOffset(2029, 12, 31, 19, 0, 0, TimeSpan.FromHours(-5));
 
         await AssertRejectedAsync(NewCover(Today.AddDays(-1), Today), "startDate");
-        await _service.CreateAsync(NewCover(Today, Today.AddDays(1)));
+        await _service.CreateAsync(NewCover(Today, Today.AddDays(1)), TestContext.Current.CancellationToken);
 
         Assert.Single(_covers.Items);
     }
@@ -136,7 +136,7 @@ public class CoverValidationTests
     {
         var cover = NewCover(DateTime.SpecifyKind(Today, kind), DateTime.SpecifyKind(Today.AddDays(1), kind));
 
-        await _service.CreateAsync(cover);
+        await _service.CreateAsync(cover, TestContext.Current.CancellationToken);
 
         Assert.Equal(DateTimeKind.Utc, cover.StartDate.Kind);
         Assert.Equal(DateTimeKind.Utc, cover.EndDate.Kind);
@@ -170,7 +170,7 @@ public class CoverValidationTests
     {
         var start = new DateTime(9999, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
-        await _service.CreateAsync(NewCover(start, start.AddDays(1)));
+        await _service.CreateAsync(NewCover(start, start.AddDays(1)), TestContext.Current.CancellationToken);
 
         Assert.Equal(1375m, Assert.Single(_covers.Items).Premium);
     }
@@ -182,8 +182,8 @@ public class CoverValidationTests
         var end = cover.EndDate;
         var premium = cover.Premium;
         var computeError = Assert.Throws<BusinessValidationException>(() =>
-            _service.ComputePremium(start, end, cover.Type));
-        var createError = await Assert.ThrowsAsync<BusinessValidationException>(() => _service.CreateAsync(cover));
+            _service.ComputePremium(start, end, cover.Type, TestContext.Current.CancellationToken));
+        var createError = await Assert.ThrowsAsync<BusinessValidationException>(() => _service.CreateAsync(cover, TestContext.Current.CancellationToken));
 
         Assert.Contains(field, createError.Errors.Keys);
         Assert.Equal(computeError.Errors.Keys.Order(), createError.Errors.Keys.Order());

@@ -63,7 +63,8 @@ public class ArchitectureTests
             var dependency = Assert.Single(Assert.Single(controller.GetConstructors()).GetParameters()).ParameterType;
             Assert.True(dependency.IsInterface);
             Assert.Equal(typeof(ClaimService).Assembly, dependency.Assembly);
-            var requestType = Assert.Single(controller.GetMethod("CreateAsync")!.GetParameters()).ParameterType;
+            var requestType = Assert.Single(controller.GetMethod("CreateAsync")!.GetParameters(),
+                parameter => parameter.ParameterType != typeof(CancellationToken)).ParameterType;
             Assert.Equal(controller.Assembly, requestType.Assembly);
             Assert.Equal("Claims.Api.Contracts", requestType.Namespace);
         }

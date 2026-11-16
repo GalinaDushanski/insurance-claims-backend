@@ -111,12 +111,21 @@ Successful POST/DELETE operations append history rows; DELETE preserves history.
 Reads, quotes, invalid requests, and failed MongoDB operations publish no audit.
 
 The in-memory queue holds 1000 events and waits when full, potentially delaying
-requests. SQL writes receive three attempts with 1- and 2-second retry delays;
+requests. After a successful MongoDB create or delete, services give audit enqueue
+its own five-second timeout, independent of the HTTP request cancellation token.
+Client disconnects still cancel repository/database work before successful
+completion; they do not cancel subsequent audit acceptance. Enqueue timeout or
+failure propagates to the caller and does not roll back the completed mutation.
+SQL writes receive three attempts with 1- and 2-second retry delays;
 exhausted events are logged and abandoned. Shutdown attempts to drain accepted
 events until the host deadline; SQL cancellation is cooperative.
 
 Delivery is best-effort: crashes or shutdown deadlines can lose events; MongoDB
-writes and enqueueing are not atomic; enqueue failure does not roll back data.
+writes and enqueueing are not atomic. A full queue exceeding the enqueue timeout,
+a closed queue, or a crash between persistence and acceptance can still leave a
+mutation without an audit event. Cancellation during a database write can also
+leave its outcome uncertain; publication only follows a successfully returned
+repository operation. There is no automatic recovery for these missing events.
 Ambiguous SQL commits can produce duplicates. There is no durable replay or
 exactly-once guarantee. Existence checks can race with deletion. Audit timestamps
 use local wall-clock `datetime2`, making timezone/DST interpretation ambiguous.

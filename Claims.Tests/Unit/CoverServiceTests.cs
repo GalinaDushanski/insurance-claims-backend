@@ -25,8 +25,8 @@ public class CoverServiceTests
         var first = NewCover();
         var second = NewCover();
 
-        var result = await _service.CreateAsync(first);
-        await _service.CreateAsync(second);
+        var result = await _service.CreateAsync(first, TestContext.Current.CancellationToken);
+        await _service.CreateAsync(second, TestContext.Current.CancellationToken);
 
         Assert.Same(first, result);
         Assert.Collection(_repository.Items, item => Assert.Same(first, item), item => Assert.Same(second, item));
@@ -53,7 +53,7 @@ public class CoverServiceTests
         _repository.AddCompletion = completion;
         var item = NewCover();
 
-        var creation = _service.CreateAsync(item);
+        var creation = _service.CreateAsync(item, TestContext.Current.CancellationToken);
         Assert.False(creation.IsCompleted);
         Assert.Equal(new[] { "save-start" }, _calls);
         completion.SetResult();
@@ -68,7 +68,7 @@ public class CoverServiceTests
         var failure = new InvalidOperationException("Save failed");
         _repository.AddFailure = failure;
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CreateAsync(NewCover()));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CreateAsync(NewCover(), TestContext.Current.CancellationToken));
 
         Assert.Same(failure, error);
         Assert.Empty(_repository.Items);
@@ -82,7 +82,7 @@ public class CoverServiceTests
         _auditer.Failure = failure;
         var item = NewCover();
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CreateAsync(item));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CreateAsync(item, TestContext.Current.CancellationToken));
 
         Assert.Same(failure, error);
         Assert.Same(item, Assert.Single(_repository.Items));
@@ -95,7 +95,7 @@ public class CoverServiceTests
         var item = NewCover();
         _repository.Items.Add(item);
 
-        await _service.DeleteAsync(item.Id);
+        await _service.DeleteAsync(item.Id, TestContext.Current.CancellationToken);
 
         Assert.Empty(_repository.Items);
         Assert.Equal(new[] { $"delete-start:{item.Id}", $"delete-complete:{item.Id}", $"audit-cover:DELETE:{item.Id}" }, _calls);
@@ -107,7 +107,7 @@ public class CoverServiceTests
         var other = NewCover();
         _repository.Items.Add(other);
 
-        var error = await Assert.ThrowsAsync<ResourceNotFoundException>(() => _service.DeleteAsync("missing"));
+        var error = await Assert.ThrowsAsync<ResourceNotFoundException>(() => _service.DeleteAsync("missing", TestContext.Current.CancellationToken));
 
         Assert.Equal("Cover 'missing' was not found.", error.Message);
         Assert.Same(other, Assert.Single(_repository.Items));
@@ -122,7 +122,7 @@ public class CoverServiceTests
         var item = NewCover();
         _repository.Items.Add(item);
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.DeleteAsync(item.Id));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.DeleteAsync(item.Id, TestContext.Current.CancellationToken));
 
         Assert.Same(failure, error);
         Assert.Same(item, Assert.Single(_repository.Items));
@@ -139,7 +139,7 @@ public class CoverServiceTests
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _repository.LookupCompletion = completion;
 
-        var deletion = _service.DeleteAsync(item.Id);
+        var deletion = _service.DeleteAsync(item.Id, TestContext.Current.CancellationToken);
         Assert.False(deletion.IsCompleted);
         Assert.Empty(_calls);
         completion.SetResult();
@@ -165,7 +165,7 @@ public class CoverServiceTests
         var item = NewCover();
         _repository.Items.Add(item);
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.DeleteAsync(item.Id));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.DeleteAsync(item.Id, TestContext.Current.CancellationToken));
 
         Assert.Same(failure, error);
         Assert.Empty(_repository.Items);
@@ -178,15 +178,15 @@ public class CoverServiceTests
         var item = NewCover();
         _repository.Items.Add(item);
 
-        Assert.Same(item, Assert.Single(await _service.GetAllAsync()));
-        Assert.Same(item, await _service.GetByIdAsync(item.Id));
+        Assert.Same(item, Assert.Single(await _service.GetAllAsync(TestContext.Current.CancellationToken)));
+        Assert.Same(item, await _service.GetByIdAsync(item.Id, TestContext.Current.CancellationToken));
         Assert.Empty(_calls);
     }
 
     [Fact]
     public async Task Get_missing_record_throws_without_auditing_or_deleting()
     {
-        var error = await Assert.ThrowsAsync<ResourceNotFoundException>(() => _service.GetByIdAsync("missing"));
+        var error = await Assert.ThrowsAsync<ResourceNotFoundException>(() => _service.GetByIdAsync("missing", TestContext.Current.CancellationToken));
 
         Assert.Equal("Cover 'missing' was not found.", error.Message);
         Assert.Empty(_calls);
@@ -200,7 +200,7 @@ public class CoverServiceTests
         var item = NewCover();
         _repository.Items.Add(item);
 
-        var deletion = _service.DeleteAsync(item.Id);
+        var deletion = _service.DeleteAsync(item.Id, TestContext.Current.CancellationToken);
 
         Assert.False(deletion.IsCompleted);
         Assert.Equal(new[] { $"delete-start:{item.Id}" }, _calls);
@@ -219,7 +219,7 @@ public class CoverServiceTests
         var item = NewCover();
         _repository.Items.Add(item);
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.DeleteAsync(item.Id));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.DeleteAsync(item.Id, TestContext.Current.CancellationToken));
 
         Assert.Same(failure, error);
         Assert.Same(item, Assert.Single(_repository.Items));
@@ -236,7 +236,7 @@ public class CoverServiceTests
         var item = NewCover();
         if (deleting) _repository.Items.Add(item);
 
-        Task operation = deleting ? _service.DeleteAsync(item.Id) : _service.CreateAsync(item);
+        Task operation = deleting ? _service.DeleteAsync(item.Id, TestContext.Current.CancellationToken) : _service.CreateAsync(item, TestContext.Current.CancellationToken);
 
         Assert.False(operation.IsCompleted);
         if (deleting) Assert.Empty(_repository.Items);

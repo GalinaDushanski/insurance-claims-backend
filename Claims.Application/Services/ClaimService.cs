@@ -7,6 +7,7 @@ namespace Claims.Services;
 
 public class ClaimService : IClaimService
 {
+    private static readonly TimeSpan AuditEnqueueTimeout = TimeSpan.FromSeconds(5);
     private readonly IClaimRepository _repository;
     private readonly IAuditer _auditer;
     private readonly ICoverRepository _covers;
@@ -18,36 +19,42 @@ public class ClaimService : IClaimService
         _covers = covers;
     }
 
-    public Task<IEnumerable<Claim>> GetAllAsync()
+    public Task<IEnumerable<Claim>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        return _repository.GetAllAsync();
+        return _repository.GetAllAsync(cancellationToken);
     }
 
-    public async Task<Claim> GetByIdAsync(string id)
+    public async Task<Claim> GetByIdAsync(string id, CancellationToken cancellationToken = default)
     {
-        return await _repository.GetByIdAsync(id)
+        return await _repository.GetByIdAsync(id, cancellationToken)
             ?? throw new ResourceNotFoundException("Claim", id);
     }
 
-    public async Task<Claim> CreateAsync(Claim claim)
+    public async Task<Claim> CreateAsync(Claim claim, CancellationToken cancellationToken = default)
     {
-        var createdUtc = await ValidateAsync(claim);
+        cancellationToken.ThrowIfCancellationRequested();
+        var createdUtc = await ValidateAsync(claim, cancellationToken);
         claim.Created = createdUtc;
         claim.Id = Guid.NewGuid().ToString();
-        await _repository.AddAsync(claim);
-        await _auditer.AuditClaimAsync(claim.Id, "POST");
+        await _repository.AddAsync(claim, cancellationToken);
+        // Persistence succeeded: client cancellation must not interrupt audit acceptance.
+        using var auditTimeout = new CancellationTokenSource(AuditEnqueueTimeout);
+        await _auditer.AuditClaimAsync(claim.Id, "POST", auditTimeout.Token);
         return claim;
     }
 
-    public async Task DeleteAsync(string id)
+    public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)
     {
-        await GetByIdAsync(id);
-        await _repository.DeleteAsync(id);
-        await _auditer.AuditClaimAsync(id, "DELETE");
+        await GetByIdAsync(id, cancellationToken);
+        await _repository.DeleteAsync(id, cancellationToken);
+        // Persistence succeeded: client cancellation must not interrupt audit acceptance.
+        using var auditTimeout = new CancellationTokenSource(AuditEnqueueTimeout);
+        await _auditer.AuditClaimAsync(id, "DELETE", auditTimeout.Token);
     }
 
-    private async Task<DateTime> ValidateAsync(Claim claim)
+    private async Task<DateTime> ValidateAsync(Claim claim, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var errors = new Dictionary<string, string[]>();
         if (claim.DamageCost < 0m || claim.DamageCost > 100000m)
             errors["damageCost"] = ["DamageCost must be between 0 and 100000, inclusive."];
@@ -62,7 +69,7 @@ public class ClaimService : IClaimService
         }
         else
         {
-            var cover = await _covers.GetByIdAsync(claim.CoverId);
+            var cover = await _covers.GetByIdAsync(claim.CoverId, cancellationToken);
             if (cover is null)
             {
                 errors["coverId"] = ["The referenced cover does not exist."];

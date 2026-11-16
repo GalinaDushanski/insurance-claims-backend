@@ -31,7 +31,7 @@ public class ClaimValidationTests
         var claim = NewClaim();
         claim.DamageCost = decimal.Parse(cost, CultureInfo.InvariantCulture);
 
-        var result = await _service.CreateAsync(claim);
+        var result = await _service.CreateAsync(claim, TestContext.Current.CancellationToken);
 
         Assert.Equal(claim.DamageCost, result.DamageCost);
         Assert.Same(claim, Assert.Single(_claims.Items));
@@ -73,7 +73,7 @@ public class ClaimValidationTests
         var claim = NewClaim();
         claim.Created = Start.AddTicks(ticksAfterStart);
 
-        await _service.CreateAsync(claim);
+        await _service.CreateAsync(claim, TestContext.Current.CancellationToken);
 
         Assert.Same(claim, Assert.Single(_claims.Items));
     }
@@ -100,7 +100,7 @@ public class ClaimValidationTests
         var claim = NewClaim();
         claim.Created = DateTime.SpecifyKind(Start, kind);
 
-        await _service.CreateAsync(claim);
+        await _service.CreateAsync(claim, TestContext.Current.CancellationToken);
 
         Assert.Equal(Start, claim.Created);
         Assert.Equal(DateTimeKind.Utc, claim.Created.Kind);
@@ -147,7 +147,7 @@ public class ClaimValidationTests
         var originalId = claim.Id;
         var originalCreated = claim.Created;
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CreateAsync(claim));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CreateAsync(claim, TestContext.Current.CancellationToken));
 
         Assert.Same(failure, error);
         Assert.Equal(originalId, claim.Id);
@@ -161,7 +161,7 @@ public class ClaimValidationTests
     {
         var originalId = claim.Id;
         var originalCreated = claim.Created;
-        var error = await Assert.ThrowsAsync<BusinessValidationException>(() => _service.CreateAsync(claim));
+        var error = await Assert.ThrowsAsync<BusinessValidationException>(() => _service.CreateAsync(claim, TestContext.Current.CancellationToken));
 
         Assert.Contains(field, error.Errors.Keys);
         Assert.All(error.Errors.Values, messages => Assert.All(messages, message => Assert.False(string.IsNullOrWhiteSpace(message))));
