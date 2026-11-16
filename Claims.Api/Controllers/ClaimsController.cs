@@ -23,6 +23,8 @@ namespace Claims.Controllers
         }
 
         [HttpPost]
+        [ProducesResponseType(typeof(ClaimContract), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
         public async Task<ActionResult> CreateAsync(ClaimContract claim, CancellationToken cancellationToken)
         {
             var createdClaim = await _claimService.CreateAsync(claim.ToDomain(), cancellationToken);
@@ -30,6 +32,8 @@ namespace Claims.Controllers
         }
 
         [HttpDelete("{id}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
         public async Task<ActionResult> DeleteAsync(string id, CancellationToken cancellationToken)
         {
             await _claimService.DeleteAsync(id, cancellationToken);
@@ -37,6 +41,8 @@ namespace Claims.Controllers
         }
 
         [HttpGet("{id}")]
+        [ProducesResponseType(typeof(ClaimContract), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
         public async Task<ClaimContract> GetAsync(string id, CancellationToken cancellationToken)
         {
             return (await _claimService.GetByIdAsync(id, cancellationToken)).ToDto();

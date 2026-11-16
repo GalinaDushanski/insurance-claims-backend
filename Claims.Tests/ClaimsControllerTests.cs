@@ -37,6 +37,31 @@ public class ClaimsControllerTests
             computeParameters.Select(x => x.GetProperty("name").GetString()).Order());
         Assert.All(computeParameters, p => Assert.Equal("query", p.GetProperty("in").GetString()));
 
+        var paths = api.RootElement.GetProperty("paths");
+        foreach (var (path, schema) in new[] { ("/Claims", "Claim"), ("/Covers", "Cover") })
+        {
+            var creation = paths.GetProperty(path).GetProperty("post").GetProperty("responses");
+            Assert.Equal(new[] { "201", "400" }, creation.EnumerateObject().Select(x => x.Name).Order());
+            AssertResponseSchema(creation.GetProperty("201"), schema);
+            AssertResponseSchema(creation.GetProperty("400"), "ValidationProblemDetails");
+
+            var byId = paths.GetProperty(path + "/{id}");
+            var get = byId.GetProperty("get").GetProperty("responses");
+            Assert.Equal(new[] { "200", "404" }, get.EnumerateObject().Select(x => x.Name).Order());
+            AssertResponseSchema(get.GetProperty("200"), schema);
+            AssertResponseSchema(get.GetProperty("404"), "ProblemDetails");
+
+            var deletion = byId.GetProperty("delete").GetProperty("responses");
+            Assert.Equal(new[] { "204", "404" }, deletion.EnumerateObject().Select(x => x.Name).Order());
+            Assert.False(deletion.GetProperty("204").TryGetProperty("content", out _));
+            AssertResponseSchema(deletion.GetProperty("404"), "ProblemDetails");
+        }
+        var computation = paths.GetProperty("/Covers/compute").GetProperty("get").GetProperty("responses");
+        Assert.Equal(new[] { "200", "400" }, computation.EnumerateObject().Select(x => x.Name).Order());
+        Assert.Equal("number", computation.GetProperty("200").GetProperty("content")
+            .GetProperty("application/json").GetProperty("schema").GetProperty("type").GetString());
+        AssertResponseSchema(computation.GetProperty("400"), "ValidationProblemDetails");
+
         var start = DateTime.UtcNow.Date.AddDays(1);
         var end = start.AddDays(200);
         var quotePath = $"/Covers/compute?startDate={start:yyyy-MM-dd}&endDate={end:yyyy-MM-dd}&coverType=Yacht";
@@ -116,4 +141,12 @@ public class ClaimsControllerTests
             await Task.Delay(100, auditTimeout.Token);
         }
     }
+    private static void AssertResponseSchema(JsonElement response, string schema)
+    {
+        var content = response.GetProperty("content").EnumerateObject().ToArray();
+        Assert.NotEmpty(content);
+        Assert.All(content, mediaType => Assert.Equal($"#/components/schemas/{schema}",
+            mediaType.Value.GetProperty("schema").GetProperty("$ref").GetString()));
+    }
+
 }
