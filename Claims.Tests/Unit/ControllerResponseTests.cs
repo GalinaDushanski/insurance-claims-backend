@@ -161,7 +161,7 @@ public class ControllerResponseTests : IDisposable
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Equal("", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
-        Assert.Equal(new[] { "delete-start:existing", "delete-complete:existing", $"audit-{resource}:DELETE:existing" }, _calls);
+        Assert.Equal(new[] { "delete-start:existing", "delete-complete:existing", $"audit-{resource}:Deleted:existing" }, _calls);
         if (resource == "claim")
         {
             Assert.Empty(_claims.Items);
@@ -175,7 +175,7 @@ public class ControllerResponseTests : IDisposable
 
         using var repeated = await _client.DeleteAsync(path, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NotFound, repeated.StatusCode);
-        Assert.Equal(new[] { "delete-start:existing", "delete-complete:existing", $"audit-{resource}:DELETE:existing" }, _calls);
+        Assert.Equal(new[] { "delete-start:existing", "delete-complete:existing", $"audit-{resource}:Deleted:existing" }, _calls);
     }
 
     [Theory]
@@ -473,7 +473,7 @@ public class ControllerResponseTests : IDisposable
         Assert.Equal(1375m, saved.Premium);
         Assert.Equal("2030-01-01T00:00:00Z", body.GetProperty("startDate").GetString());
         Assert.Equal("2030-01-02T00:00:00Z", body.GetProperty("endDate").GetString());
-        Assert.Equal(new[] { "save-start", "save-complete", $"audit-cover:POST:{saved.Id}" }, _calls);
+        Assert.Equal(new[] { "save-start", "save-complete", $"audit-cover:Created:{saved.Id}" }, _calls);
     }
 
     [Theory]

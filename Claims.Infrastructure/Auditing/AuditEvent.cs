@@ -9,5 +9,5 @@ public enum AuditEntityType
 public sealed record AuditEvent(
     AuditEntityType EntityType,
     string EntityId,
-    string HttpRequestType,
+    AuditAction Action,
     DateTime Created);

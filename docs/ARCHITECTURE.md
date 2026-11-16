@@ -107,6 +107,10 @@ direct calculator calls throw `ArgumentOutOfRangeException`.
 ## Asynchronous auditing
 
 The flow is MongoDB mutation → queue acceptance → HTTP response.
+Application services publish `AuditAction.Created` or `AuditAction.Deleted` through
+`IAuditer`; queued events carry that action. Only `SqlAuditWriter` maps these to
+legacy `HttpRequestType` column values `POST` and `DELETE`, respectively. The SQL
+schema and stored values are unchanged.
 [AuditWorker](../Claims.Infrastructure/Auditing/AuditWorker.cs) writes SQL separately.
 Successful POST/DELETE operations append history rows; DELETE preserves history.
 Reads, quotes, invalid requests, and failed MongoDB operations publish no audit.

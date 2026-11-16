@@ -14,8 +14,8 @@ public class AuditQueueTests
         var expected = new[]
         {
             NewEvent("claim-1"),
-            NewEvent("cover-1", AuditEntityType.Cover, "DELETE"),
-            NewEvent("claim-2", AuditEntityType.Claim, "DELETE")
+            NewEvent("cover-1", AuditEntityType.Cover, AuditAction.Deleted),
+            NewEvent("claim-2", AuditEntityType.Claim, AuditAction.Deleted)
         };
         foreach (var auditEvent in expected)
             await queue.EnqueueAsync(auditEvent, timeout.Token);
@@ -181,6 +181,6 @@ public class AuditQueueTests
         return timeout;
     }
 
-    private static AuditEvent NewEvent(string id, AuditEntityType type = AuditEntityType.Claim, string operation = "POST") =>
+    private static AuditEvent NewEvent(string id, AuditEntityType type = AuditEntityType.Claim, AuditAction operation = AuditAction.Created) =>
         new(type, id, operation, new DateTime(2030, 1, 1, 12, 0, 0, DateTimeKind.Utc));
 }

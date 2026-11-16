@@ -39,7 +39,7 @@ public sealed class AuditWorker(
             {
                 logger.LogWarning(
                     "Audit write cancelled for {EntityType} {EntityId} {HttpRequestType}, created {Created}, on attempt {Attempt}.",
-                    auditEvent.EntityType, auditEvent.EntityId, auditEvent.HttpRequestType, auditEvent.Created, attempt);
+                    auditEvent.EntityType, auditEvent.EntityId, auditEvent.Action, auditEvent.Created, attempt);
                 throw;
             }
             catch (Exception exception)
@@ -48,13 +48,13 @@ public sealed class AuditWorker(
                 {
                     logger.LogError(exception,
                         "Audit event abandoned for {EntityType} {EntityId} {HttpRequestType}, created {Created}, after attempt {Attempt}.",
-                        auditEvent.EntityType, auditEvent.EntityId, auditEvent.HttpRequestType, auditEvent.Created, attempt);
+                        auditEvent.EntityType, auditEvent.EntityId, auditEvent.Action, auditEvent.Created, attempt);
                     return;
                 }
 
                 logger.LogWarning(exception,
                     "Audit write failed for {EntityType} {EntityId} {HttpRequestType}, created {Created}, on attempt {Attempt}. Retrying.",
-                    auditEvent.EntityType, auditEvent.EntityId, auditEvent.HttpRequestType, auditEvent.Created, attempt);
+                    auditEvent.EntityType, auditEvent.EntityId, auditEvent.Action, auditEvent.Created, attempt);
             }
 
             await Task.Delay(TimeSpan.FromSeconds(attempt), cancellationToken);

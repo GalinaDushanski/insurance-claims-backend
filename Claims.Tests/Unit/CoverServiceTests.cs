@@ -41,8 +41,8 @@ public class CoverServiceTests
         Assert.Equal(CoverType.Yacht, result.Type);
         Assert.Equal(new[]
         {
-            "save-start", "save-complete", $"audit-cover:POST:{first.Id}",
-            "save-start", "save-complete", $"audit-cover:POST:{second.Id}"
+            "save-start", "save-complete", $"audit-cover:Created:{first.Id}",
+            "save-start", "save-complete", $"audit-cover:Created:{second.Id}"
         }, _calls);
     }
 
@@ -59,7 +59,7 @@ public class CoverServiceTests
         completion.SetResult();
         await creation;
 
-        Assert.Equal(new[] { "save-start", "save-complete", $"audit-cover:POST:{item.Id}" }, _calls);
+        Assert.Equal(new[] { "save-start", "save-complete", $"audit-cover:Created:{item.Id}" }, _calls);
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public class CoverServiceTests
 
         Assert.Same(failure, error);
         Assert.Same(item, Assert.Single(_repository.Items));
-        Assert.Equal(new[] { "save-start", "save-complete", $"audit-cover:POST:{item.Id}" }, _calls);
+        Assert.Equal(new[] { "save-start", "save-complete", $"audit-cover:Created:{item.Id}" }, _calls);
     }
 
     [Fact]
@@ -98,7 +98,7 @@ public class CoverServiceTests
         await _service.DeleteAsync(item.Id, TestContext.Current.CancellationToken);
 
         Assert.Empty(_repository.Items);
-        Assert.Equal(new[] { $"delete-start:{item.Id}", $"delete-complete:{item.Id}", $"audit-cover:DELETE:{item.Id}" }, _calls);
+        Assert.Equal(new[] { $"delete-start:{item.Id}", $"delete-complete:{item.Id}", $"audit-cover:Deleted:{item.Id}" }, _calls);
     }
 
     [Fact]
@@ -147,7 +147,7 @@ public class CoverServiceTests
         if (exists)
         {
             await deletion;
-            Assert.Equal(new[] { $"delete-start:{item.Id}", $"delete-complete:{item.Id}", $"audit-cover:DELETE:{item.Id}" }, _calls);
+            Assert.Equal(new[] { $"delete-start:{item.Id}", $"delete-complete:{item.Id}", $"audit-cover:Deleted:{item.Id}" }, _calls);
         }
         else
         {
@@ -169,7 +169,7 @@ public class CoverServiceTests
 
         Assert.Same(failure, error);
         Assert.Empty(_repository.Items);
-        Assert.Equal(new[] { $"delete-start:{item.Id}", $"delete-complete:{item.Id}", $"audit-cover:DELETE:{item.Id}" }, _calls);
+        Assert.Equal(new[] { $"delete-start:{item.Id}", $"delete-complete:{item.Id}", $"audit-cover:Deleted:{item.Id}" }, _calls);
     }
 
     [Fact]
@@ -208,7 +208,7 @@ public class CoverServiceTests
         completion.SetResult();
         await deletion;
         Assert.Empty(_repository.Items);
-        Assert.Equal(new[] { $"delete-start:{item.Id}", $"delete-complete:{item.Id}", $"audit-cover:DELETE:{item.Id}" }, _calls);
+        Assert.Equal(new[] { $"delete-start:{item.Id}", $"delete-complete:{item.Id}", $"audit-cover:Deleted:{item.Id}" }, _calls);
     }
 
     [Fact]
@@ -241,7 +241,7 @@ public class CoverServiceTests
         Assert.False(operation.IsCompleted);
         if (deleting) Assert.Empty(_repository.Items);
         else Assert.Same(item, Assert.Single(_repository.Items));
-        Assert.Equal($"audit-cover:{(deleting ? "DELETE" : "POST")}:{item.Id}", _calls.Last());
+        Assert.Equal($"audit-cover:{(deleting ? "Deleted" : "Created")}:{item.Id}", _calls.Last());
         completion.SetResult();
         await operation;
     }

@@ -97,7 +97,7 @@ public class HttpAuditIntegrationTests
             Assert.False(gate.Persisted.Task.IsCompleted);
             Assert.False(gate.Release.Task.IsCompleted);
             Assert.Equal(type, auditEvent.EntityType);
-            Assert.Equal(operation, auditEvent.HttpRequestType);
+            Assert.Equal(operation == "POST" ? AuditAction.Created : AuditAction.Deleted, auditEvent.Action);
             Assert.Equal(clock.GetLocalNow().DateTime, auditEvent.Created);
             if (operation == "POST")
             {

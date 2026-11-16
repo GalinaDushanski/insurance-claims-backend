@@ -7,17 +7,17 @@ namespace Claims.Tests.Unit;
 public class SqlAuditWriterTests
 {
     [Theory]
-    [InlineData(AuditEntityType.Claim, "POST")]
-    [InlineData(AuditEntityType.Claim, "DELETE")]
-    [InlineData(AuditEntityType.Cover, "POST")]
-    [InlineData(AuditEntityType.Cover, "DELETE")]
+    [InlineData(AuditEntityType.Claim, AuditAction.Created, "POST")]
+    [InlineData(AuditEntityType.Claim, AuditAction.Deleted, "DELETE")]
+    [InlineData(AuditEntityType.Cover, AuditAction.Created, "POST")]
+    [InlineData(AuditEntityType.Cover, AuditAction.Deleted, "DELETE")]
     public async Task Maps_events_to_added_audit_entities_and_preserves_existing_tables_and_fields(
-        AuditEntityType type, string operation)
+        AuditEntityType type, AuditAction action, string expectedLegacyValue)
     {
         await using var context = new CapturingAuditContext();
         var writer = new SqlAuditWriter(context);
         var created = new DateTime(2030, 1, 1, 12, 0, 0, DateTimeKind.Local);
-        var auditEvent = new AuditEvent(type, "entity-id", operation, created);
+        var auditEvent = new AuditEvent(type, "entity-id", action, created);
         var token = TestContext.Current.CancellationToken;
 
         await writer.WriteAsync(auditEvent, token);
@@ -30,7 +30,7 @@ public class SqlAuditWriterTests
         {
             var audit = Assert.IsType<ClaimAudit>(entry.Entity);
             Assert.Equal("entity-id", audit.ClaimId);
-            Assert.Equal(operation, audit.HttpRequestType);
+            Assert.Equal(expectedLegacyValue, audit.HttpRequestType);
             Assert.Equal(created, audit.Created);
             Assert.Equal(created.Kind, audit.Created.Kind);
             Assert.Equal("ClaimAudits", context.Model.FindEntityType(typeof(ClaimAudit))!.GetTableName());
@@ -40,7 +40,7 @@ public class SqlAuditWriterTests
         {
             var audit = Assert.IsType<CoverAudit>(entry.Entity);
             Assert.Equal("entity-id", audit.CoverId);
-            Assert.Equal(operation, audit.HttpRequestType);
+            Assert.Equal(expectedLegacyValue, audit.HttpRequestType);
             Assert.Equal(created, audit.Created);
             Assert.Equal(created.Kind, audit.Created.Kind);
             Assert.Equal("CoverAudits", context.Model.FindEntityType(typeof(CoverAudit))!.GetTableName());
@@ -58,7 +58,7 @@ public class SqlAuditWriterTests
         var created = new DateTime(2030, 1, 1, 12, 0, 0, kind);
 
         await new SqlAuditWriter(context).WriteAsync(
-            new AuditEvent(AuditEntityType.Claim, "claim", "POST", created), TestContext.Current.CancellationToken);
+            new AuditEvent(AuditEntityType.Claim, "claim", AuditAction.Created, created), TestContext.Current.CancellationToken);
 
         var audit = Assert.IsType<ClaimAudit>(Assert.Single(context.SavedEntries).Entity);
         Assert.Equal(created, audit.Created);
@@ -73,7 +73,7 @@ public class SqlAuditWriterTests
         await cancellation.CancelAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new SqlAuditWriter(context).WriteAsync(
-            new AuditEvent(AuditEntityType.Claim, "claim", "DELETE", DateTime.Now), cancellation.Token));
+            new AuditEvent(AuditEntityType.Claim, "claim", AuditAction.Deleted, DateTime.Now), cancellation.Token));
 
         Assert.Equal(0, context.SaveCalls);
         Assert.Empty(context.ChangeTracker.Entries());
@@ -89,7 +89,7 @@ public class SqlAuditWriterTests
         context.SaveCompletion = completion;
 
         var writing = new SqlAuditWriter(context).WriteAsync(
-            new AuditEvent(AuditEntityType.Claim, "claim", "POST", DateTime.Now), timeout.Token);
+            new AuditEvent(AuditEntityType.Claim, "claim", AuditAction.Created, DateTime.Now), timeout.Token);
 
         Assert.False(writing.IsCompleted);
         Assert.Equal(1, context.SaveCalls);
@@ -105,7 +105,7 @@ public class SqlAuditWriterTests
         await using var context = new CapturingAuditContext();
         context.SaveCompletion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var writing = new SqlAuditWriter(context).WriteAsync(
-            new AuditEvent(AuditEntityType.Cover, "cover", "DELETE", DateTime.Now), cancellation.Token);
+            new AuditEvent(AuditEntityType.Cover, "cover", AuditAction.Deleted, DateTime.Now), cancellation.Token);
         Assert.False(writing.IsCompleted);
 
         await cancellation.CancelAsync();
@@ -120,7 +120,21 @@ public class SqlAuditWriterTests
         await using var context = new CapturingAuditContext();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => new SqlAuditWriter(context).WriteAsync(
-            new AuditEvent((AuditEntityType)99, "unknown", "POST", DateTime.Now), TestContext.Current.CancellationToken));
+            new AuditEvent((AuditEntityType)99, "unknown", AuditAction.Created, DateTime.Now), TestContext.Current.CancellationToken));
+
+        Assert.Equal(0, context.SaveCalls);
+        Assert.Empty(context.ChangeTracker.Entries());
+    }
+
+    [Theory]
+    [InlineData(AuditEntityType.Claim)]
+    [InlineData(AuditEntityType.Cover)]
+    public async Task Undefined_action_is_rejected_without_tracking_or_saving(AuditEntityType type)
+    {
+        await using var context = new CapturingAuditContext();
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => new SqlAuditWriter(context).WriteAsync(
+            new AuditEvent(type, "unknown-action", (AuditAction)99, DateTime.Now), TestContext.Current.CancellationToken));
 
         Assert.Equal(0, context.SaveCalls);
         Assert.Empty(context.ChangeTracker.Entries());

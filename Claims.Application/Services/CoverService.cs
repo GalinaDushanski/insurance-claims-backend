@@ -44,7 +44,7 @@ public class CoverService : ICoverService
         await _repository.AddAsync(cover, cancellationToken);
         // Persistence succeeded: client cancellation must not interrupt audit acceptance.
         using var auditTimeout = new CancellationTokenSource(AuditEnqueueTimeout);
-        await _auditer.AuditCoverAsync(cover.Id, "POST", auditTimeout.Token);
+        await _auditer.AuditCoverAsync(cover.Id, AuditAction.Created, auditTimeout.Token);
         return cover;
     }
 
@@ -54,7 +54,7 @@ public class CoverService : ICoverService
         await _repository.DeleteAsync(id, cancellationToken);
         // Persistence succeeded: client cancellation must not interrupt audit acceptance.
         using var auditTimeout = new CancellationTokenSource(AuditEnqueueTimeout);
-        await _auditer.AuditCoverAsync(id, "DELETE", auditTimeout.Token);
+        await _auditer.AuditCoverAsync(id, AuditAction.Deleted, auditTimeout.Token);
     }
 
     public decimal ComputePremium(DateTime startDate, DateTime endDate, CoverType coverType, CancellationToken cancellationToken = default)

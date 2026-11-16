@@ -35,7 +35,7 @@ public class ClaimValidationTests
 
         Assert.Equal(claim.DamageCost, result.DamageCost);
         Assert.Same(claim, Assert.Single(_claims.Items));
-        Assert.Equal(new[] { "save-start", "save-complete", $"audit-claim:POST:{claim.Id}" }, _calls);
+        Assert.Equal(new[] { "save-start", "save-complete", $"audit-claim:Created:{claim.Id}" }, _calls);
     }
 
     [Theory]

@@ -7,11 +7,11 @@ namespace Claims.Tests.Unit;
 public class AuditerTests
 {
     [Theory]
-    [InlineData(AuditEntityType.Claim, "POST")]
-    [InlineData(AuditEntityType.Claim, "DELETE")]
-    [InlineData(AuditEntityType.Cover, "POST")]
-    [InlineData(AuditEntityType.Cover, "DELETE")]
-    public async Task Publishes_entity_id_operation_and_local_wall_clock_timestamp(AuditEntityType type, string operation)
+    [InlineData(AuditEntityType.Claim, AuditAction.Created)]
+    [InlineData(AuditEntityType.Claim, AuditAction.Deleted)]
+    [InlineData(AuditEntityType.Cover, AuditAction.Created)]
+    [InlineData(AuditEntityType.Cover, AuditAction.Deleted)]
+    public async Task Publishes_entity_id_operation_and_local_wall_clock_timestamp(AuditEntityType type, AuditAction operation)
     {
         using var timeout = CreateTimeout();
         var queue = new AuditQueue();
@@ -25,7 +25,7 @@ public class AuditerTests
         Assert.True(await reader.MoveNextAsync());
         Assert.Equal(type, reader.Current.EntityType);
         Assert.Equal("entity-id", reader.Current.EntityId);
-        Assert.Equal(operation, reader.Current.HttpRequestType);
+        Assert.Equal(operation, reader.Current.Action);
         Assert.Equal(new DateTime(2030, 1, 2, 1, 30, 0), reader.Current.Created);
         Assert.Equal(DateTimeKind.Unspecified, reader.Current.Created.Kind);
         Assert.False(await reader.MoveNextAsync());
@@ -43,7 +43,7 @@ public class AuditerTests
         var auditer = new Auditer(queue, clock);
         await FillAsync(queue, timeout.Token);
 
-        var publishing = PublishAsync(auditer, type, "published", "POST", timeout.Token);
+        var publishing = PublishAsync(auditer, type, "published", AuditAction.Created, timeout.Token);
         Assert.False(publishing.IsCompleted);
         clock.UtcNow = clock.UtcNow.AddHours(1);
         await using var reader = queue.ReadAllAsync(timeout.Token).GetAsyncEnumerator(timeout.Token);
@@ -70,7 +70,7 @@ public class AuditerTests
         queue.Complete();
 
         await Assert.ThrowsAsync<ChannelClosedException>(() =>
-            PublishAsync(new Auditer(queue, NewClock()), type, "rejected", "POST", timeout.Token));
+            PublishAsync(new Auditer(queue, NewClock()), type, "rejected", AuditAction.Created, timeout.Token));
     }
 
     [Theory]
@@ -82,7 +82,7 @@ public class AuditerTests
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
         var queue = new AuditQueue();
         await FillAsync(queue, timeout.Token);
-        var publishing = PublishAsync(new Auditer(queue, NewClock()), type, "cancelled", "POST", cancellation.Token);
+        var publishing = PublishAsync(new Auditer(queue, NewClock()), type, "cancelled", AuditAction.Created, cancellation.Token);
         Assert.False(publishing.IsCompleted);
 
         await cancellation.CancelAsync();
@@ -97,7 +97,7 @@ public class AuditerTests
         Assert.Equal(1000, count);
     }
 
-    private static Task PublishAsync(IAuditer auditer, AuditEntityType type, string id, string operation, CancellationToken token) =>
+    private static Task PublishAsync(IAuditer auditer, AuditEntityType type, string id, AuditAction operation, CancellationToken token) =>
         type == AuditEntityType.Claim
             ? auditer.AuditClaimAsync(id, operation, token)
             : auditer.AuditCoverAsync(id, operation, token);
@@ -105,7 +105,7 @@ public class AuditerTests
     private static async Task FillAsync(AuditQueue queue, CancellationToken token)
     {
         for (var id = 0; id < 1000; id++)
-            await queue.EnqueueAsync(new AuditEvent(AuditEntityType.Claim, id.ToString(), "POST", DateTime.MinValue), token);
+            await queue.EnqueueAsync(new AuditEvent(AuditEntityType.Claim, id.ToString(), AuditAction.Created, DateTime.MinValue), token);
     }
 
     private static FixedTimeProvider NewClock() => new(

@@ -39,7 +39,7 @@ public class ClaimService : IClaimService
         await _repository.AddAsync(claim, cancellationToken);
         // Persistence succeeded: client cancellation must not interrupt audit acceptance.
         using var auditTimeout = new CancellationTokenSource(AuditEnqueueTimeout);
-        await _auditer.AuditClaimAsync(claim.Id, "POST", auditTimeout.Token);
+        await _auditer.AuditClaimAsync(claim.Id, AuditAction.Created, auditTimeout.Token);
         return claim;
     }
 
@@ -49,7 +49,7 @@ public class ClaimService : IClaimService
         await _repository.DeleteAsync(id, cancellationToken);
         // Persistence succeeded: client cancellation must not interrupt audit acceptance.
         using var auditTimeout = new CancellationTokenSource(AuditEnqueueTimeout);
-        await _auditer.AuditClaimAsync(id, "DELETE", auditTimeout.Token);
+        await _auditer.AuditClaimAsync(id, AuditAction.Deleted, auditTimeout.Token);
     }
 
     private async Task<DateTime> ValidateAsync(Claim claim, CancellationToken cancellationToken)

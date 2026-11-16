@@ -49,16 +49,16 @@ public class AuditPersistenceTests
             const string claimId = "claim-audit-test";
             const string coverId = "cover-audit-test";
             var claimPostTime = clock.GetLocalNow().DateTime;
-            await auditer.AuditClaimAsync(claimId, "POST", timeout.Token);
+            await auditer.AuditClaimAsync(claimId, AuditAction.Created, timeout.Token);
             clock.UtcNow = clock.UtcNow.AddMinutes(1);
             var claimDeleteTime = clock.GetLocalNow().DateTime;
-            await auditer.AuditClaimAsync(claimId, "DELETE", timeout.Token);
+            await auditer.AuditClaimAsync(claimId, AuditAction.Deleted, timeout.Token);
             clock.UtcNow = clock.UtcNow.AddMinutes(1);
             var coverPostTime = clock.GetLocalNow().DateTime;
-            await auditer.AuditCoverAsync(coverId, "POST", timeout.Token);
+            await auditer.AuditCoverAsync(coverId, AuditAction.Created, timeout.Token);
             clock.UtcNow = clock.UtcNow.AddMinutes(1);
             var coverDeleteTime = clock.GetLocalNow().DateTime;
-            await auditer.AuditCoverAsync(coverId, "DELETE", timeout.Token);
+            await auditer.AuditCoverAsync(coverId, AuditAction.Deleted, timeout.Token);
 
             // Drain the accepted events before querying SQL; no polling or sleeps.
             await worker.StopAsync(timeout.Token);

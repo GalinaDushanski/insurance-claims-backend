@@ -121,7 +121,7 @@ public class MongoDateTimePrecisionTests(ITestOutputHelper output)
         {
             await service.CreateAsync(submission, timeout.Token);
             Assert.Equal(2, await reading.Claims.CountAsync(timeout.Token));
-            Assert.Equal($"audit-claim:POST:{submission.Id}", Assert.Single(calls));
+            Assert.Equal($"audit-claim:Created:{submission.Id}", Assert.Single(calls));
         }
 
         output.WriteLine($"Scenario: {scenario}");

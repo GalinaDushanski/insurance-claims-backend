@@ -24,8 +24,8 @@ public class AuditWorkerTests
                 await releaseFirst.Task.WaitAsync(token);
             }
         };
-        var first = NewEvent("claim", AuditEntityType.Claim, "POST");
-        var second = NewEvent("cover", AuditEntityType.Cover, "DELETE");
+        var first = NewEvent("claim", AuditEntityType.Claim, AuditAction.Created);
+        var second = NewEvent("cover", AuditEntityType.Cover, AuditAction.Deleted);
         await fixture.Queue.EnqueueAsync(first, timeout.Token);
         await fixture.Queue.EnqueueAsync(second, timeout.Token);
         fixture.Queue.Complete();
@@ -50,7 +50,7 @@ public class AuditWorkerTests
         await using var fixture = new WorkerFixture();
         var failure = new InvalidOperationException("Temporary SQL failure");
         fixture.State.Write = (_, scopeId, _) => scopeId == 1 ? Task.FromException(failure) : Task.CompletedTask;
-        var auditEvent = NewEvent("retry", AuditEntityType.Cover, "POST");
+        var auditEvent = NewEvent("retry", AuditEntityType.Cover, AuditAction.Created);
         await fixture.Queue.EnqueueAsync(auditEvent, timeout.Token);
         fixture.Queue.Complete();
 
@@ -65,7 +65,7 @@ public class AuditWorkerTests
         Assert.Equal(1, warning.Properties["Attempt"]);
         Assert.Equal(auditEvent.EntityType, warning.Properties["EntityType"]);
         Assert.Equal(auditEvent.EntityId, warning.Properties["EntityId"]);
-        Assert.Equal(auditEvent.HttpRequestType, warning.Properties["HttpRequestType"]);
+        Assert.Equal(auditEvent.Action, warning.Properties["HttpRequestType"]);
         Assert.Equal(auditEvent.Created, warning.Properties["Created"]);
     }
 
@@ -302,6 +302,6 @@ public class AuditWorkerTests
         return timeout;
     }
 
-    private static AuditEvent NewEvent(string id, AuditEntityType type = AuditEntityType.Claim, string operation = "POST") =>
+    private static AuditEvent NewEvent(string id, AuditEntityType type = AuditEntityType.Claim, AuditAction operation = AuditAction.Created) =>
         new(type, id, operation, new DateTime(2030, 1, 1, 12, 0, 0, DateTimeKind.Local));
 }

@@ -6,13 +6,21 @@ public sealed class SqlAuditWriter(AuditContext context) : IAuditWriter
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        var httpRequestType = auditEvent.Action switch
+        {
+            AuditAction.Created => "POST",
+            AuditAction.Deleted => "DELETE",
+            _ => throw new ArgumentOutOfRangeException(nameof(auditEvent), auditEvent.Action,
+                "Unknown audit action.")
+        };
+
         switch (auditEvent.EntityType)
         {
             case AuditEntityType.Claim:
                 context.ClaimAudits.Add(new ClaimAudit
                 {
                     ClaimId = auditEvent.EntityId,
-                    HttpRequestType = auditEvent.HttpRequestType,
+                    HttpRequestType = httpRequestType,
                     Created = auditEvent.Created
                 });
                 break;
@@ -20,7 +28,7 @@ public sealed class SqlAuditWriter(AuditContext context) : IAuditWriter
                 context.CoverAudits.Add(new CoverAudit
                 {
                     CoverId = auditEvent.EntityId,
-                    HttpRequestType = auditEvent.HttpRequestType,
+                    HttpRequestType = httpRequestType,
                     Created = auditEvent.Created
                 });
                 break;

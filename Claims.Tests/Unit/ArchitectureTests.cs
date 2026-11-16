@@ -71,6 +71,7 @@ public class ArchitectureTests
         Assert.Equal(typeof(ClaimService).Assembly, typeof(IClaimRepository).Assembly);
         Assert.Equal(typeof(ClaimService).Assembly, typeof(ICoverRepository).Assembly);
         Assert.Equal(typeof(ClaimService).Assembly, typeof(IAuditer).Assembly);
+        Assert.Equal(typeof(ClaimService).Assembly, typeof(AuditAction).Assembly);
         Assert.Equal("Claims.Infrastructure", typeof(ClaimRepository).Assembly.GetName().Name);
     }
 

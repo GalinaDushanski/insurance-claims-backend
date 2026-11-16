@@ -119,11 +119,11 @@ internal sealed class RecordingAuditer(List<string> calls) : IAuditer
     public Exception? Failure { get; set; }
     public TaskCompletionSource? PublicationCompletion { get; set; }
 
-    public Task AuditClaimAsync(string id, string httpRequestType, CancellationToken cancellationToken = default) =>
-        RecordAsync($"audit-claim:{httpRequestType}:{id}", cancellationToken);
+    public Task AuditClaimAsync(string id, AuditAction action, CancellationToken cancellationToken = default) =>
+        RecordAsync($"audit-claim:{action}:{id}", cancellationToken);
 
-    public Task AuditCoverAsync(string id, string httpRequestType, CancellationToken cancellationToken = default) =>
-        RecordAsync($"audit-cover:{httpRequestType}:{id}", cancellationToken);
+    public Task AuditCoverAsync(string id, AuditAction action, CancellationToken cancellationToken = default) =>
+        RecordAsync($"audit-cover:{action}:{id}", cancellationToken);
 
     private async Task RecordAsync(string call, CancellationToken cancellationToken)
     {

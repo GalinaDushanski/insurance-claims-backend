@@ -46,8 +46,8 @@ public class ClaimServiceTests
         Assert.Equal(42m, result.DamageCost);
         Assert.Equal(new[]
         {
-            "save-start", "save-complete", $"audit-claim:POST:{first.Id}",
-            "save-start", "save-complete", $"audit-claim:POST:{second.Id}"
+            "save-start", "save-complete", $"audit-claim:Created:{first.Id}",
+            "save-start", "save-complete", $"audit-claim:Created:{second.Id}"
         }, _calls);
     }
 
@@ -64,7 +64,7 @@ public class ClaimServiceTests
         completion.SetResult();
         await creation;
 
-        Assert.Equal(new[] { "save-start", "save-complete", $"audit-claim:POST:{item.Id}" }, _calls);
+        Assert.Equal(new[] { "save-start", "save-complete", $"audit-claim:Created:{item.Id}" }, _calls);
     }
 
     [Fact]
@@ -91,7 +91,7 @@ public class ClaimServiceTests
 
         Assert.Same(failure, error);
         Assert.Same(item, Assert.Single(_repository.Items));
-        Assert.Equal(new[] { "save-start", "save-complete", $"audit-claim:POST:{item.Id}" }, _calls);
+        Assert.Equal(new[] { "save-start", "save-complete", $"audit-claim:Created:{item.Id}" }, _calls);
     }
 
     [Fact]
@@ -103,7 +103,7 @@ public class ClaimServiceTests
         await _service.DeleteAsync(item.Id, TestContext.Current.CancellationToken);
 
         Assert.Empty(_repository.Items);
-        Assert.Equal(new[] { $"delete-start:{item.Id}", $"delete-complete:{item.Id}", $"audit-claim:DELETE:{item.Id}" }, _calls);
+        Assert.Equal(new[] { $"delete-start:{item.Id}", $"delete-complete:{item.Id}", $"audit-claim:Deleted:{item.Id}" }, _calls);
     }
 
     [Fact]
@@ -152,7 +152,7 @@ public class ClaimServiceTests
         if (exists)
         {
             await deletion;
-            Assert.Equal(new[] { $"delete-start:{item.Id}", $"delete-complete:{item.Id}", $"audit-claim:DELETE:{item.Id}" }, _calls);
+            Assert.Equal(new[] { $"delete-start:{item.Id}", $"delete-complete:{item.Id}", $"audit-claim:Deleted:{item.Id}" }, _calls);
         }
         else
         {
@@ -174,7 +174,7 @@ public class ClaimServiceTests
 
         Assert.Same(failure, error);
         Assert.Empty(_repository.Items);
-        Assert.Equal(new[] { $"delete-start:{item.Id}", $"delete-complete:{item.Id}", $"audit-claim:DELETE:{item.Id}" }, _calls);
+        Assert.Equal(new[] { $"delete-start:{item.Id}", $"delete-complete:{item.Id}", $"audit-claim:Deleted:{item.Id}" }, _calls);
     }
 
     [Fact]
@@ -213,7 +213,7 @@ public class ClaimServiceTests
         completion.SetResult();
         await deletion;
         Assert.Empty(_repository.Items);
-        Assert.Equal(new[] { $"delete-start:{item.Id}", $"delete-complete:{item.Id}", $"audit-claim:DELETE:{item.Id}" }, _calls);
+        Assert.Equal(new[] { $"delete-start:{item.Id}", $"delete-complete:{item.Id}", $"audit-claim:Deleted:{item.Id}" }, _calls);
     }
 
     [Fact]
@@ -246,7 +246,7 @@ public class ClaimServiceTests
         Assert.False(operation.IsCompleted);
         if (deleting) Assert.Empty(_repository.Items);
         else Assert.Same(item, Assert.Single(_repository.Items));
-        Assert.Equal($"audit-claim:{(deleting ? "DELETE" : "POST")}:{item.Id}", _calls.Last());
+        Assert.Equal($"audit-claim:{(deleting ? "Deleted" : "Created")}:{item.Id}", _calls.Last());
         completion.SetResult();
         await operation;
     }

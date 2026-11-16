@@ -108,7 +108,7 @@ public class CoverValidationTests
         Assert.Equal(Today, result.StartDate);
         Assert.Equal(Today.AddTicks(1), result.EndDate);
         Assert.Equal(quotedPremium, result.Premium);
-        Assert.Equal(new[] { "save-start", "save-complete", $"audit-cover:POST:{cover.Id}" }, _calls);
+        Assert.Equal(new[] { "save-start", "save-complete", $"audit-cover:Created:{cover.Id}" }, _calls);
     }
 
     [Theory]

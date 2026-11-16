@@ -10,12 +10,12 @@ namespace Claims.Tests.Unit;
 public class ServiceAuditPublishingTests
 {
     [Theory]
-    [InlineData(AuditEntityType.Claim, "POST")]
-    [InlineData(AuditEntityType.Claim, "DELETE")]
-    [InlineData(AuditEntityType.Cover, "POST")]
-    [InlineData(AuditEntityType.Cover, "DELETE")]
+    [InlineData(AuditEntityType.Claim, AuditAction.Created)]
+    [InlineData(AuditEntityType.Claim, AuditAction.Deleted)]
+    [InlineData(AuditEntityType.Cover, AuditAction.Created)]
+    [InlineData(AuditEntityType.Cover, AuditAction.Deleted)]
     public async Task Operation_completes_after_enqueue_while_worker_is_still_waiting_for_sql(
-        AuditEntityType type, string operation)
+        AuditEntityType type, AuditAction operation)
     {
         using var timeout = CreateTimeout();
         var calls = new List<string>();
@@ -27,9 +27,9 @@ public class ServiceAuditPublishingTests
         if (type == AuditEntityType.Claim)
         {
             covers.Items.Add(cover);
-            if (operation == "DELETE") claims.Items.Add(claim);
+            if (operation == AuditAction.Deleted) claims.Items.Add(claim);
         }
-        else if (operation == "DELETE") covers.Items.Add(cover);
+        else if (operation == AuditAction.Deleted) covers.Items.Add(cover);
         var gate = new WriterGate();
         var services = new ServiceCollection();
         services.AddLogging();
@@ -54,12 +54,12 @@ public class ServiceAuditPublishingTests
                 if (type == AuditEntityType.Claim)
                 {
                     var service = requestScope.ServiceProvider.GetRequiredService<IClaimService>();
-                    requestOperation = operation == "POST" ? service.CreateAsync(claim, timeout.Token) : service.DeleteAsync(claim.Id, timeout.Token);
+                    requestOperation = operation == AuditAction.Created ? service.CreateAsync(claim, timeout.Token) : service.DeleteAsync(claim.Id, timeout.Token);
                 }
                 else
                 {
                     var service = requestScope.ServiceProvider.GetRequiredService<ICoverService>();
-                    requestOperation = operation == "POST" ? service.CreateAsync(cover, timeout.Token) : service.DeleteAsync(cover.Id, timeout.Token);
+                    requestOperation = operation == AuditAction.Created ? service.CreateAsync(cover, timeout.Token) : service.DeleteAsync(cover.Id, timeout.Token);
                 }
 
                 var auditEvent = await gate.Started.Task.WaitAsync(timeout.Token);
@@ -68,16 +68,16 @@ public class ServiceAuditPublishingTests
                 Assert.False(gate.Persisted.Task.IsCompleted);
                 Assert.Equal(type, auditEvent.EntityType);
                 Assert.Equal(type == AuditEntityType.Claim ? claim.Id : cover.Id, auditEvent.EntityId);
-                Assert.Equal(operation, auditEvent.HttpRequestType);
+                Assert.Equal(operation, auditEvent.Action);
                 Assert.Equal(clock.GetLocalNow().DateTime, auditEvent.Created);
                 if (type == AuditEntityType.Claim)
                 {
-                    if (operation == "DELETE") Assert.Empty(claims.Items);
+                    if (operation == AuditAction.Deleted) Assert.Empty(claims.Items);
                     else Assert.Same(claim, Assert.Single(claims.Items));
                 }
                 else
                 {
-                    if (operation == "DELETE") Assert.Empty(covers.Items);
+                    if (operation == AuditAction.Deleted) Assert.Empty(covers.Items);
                     else Assert.Same(cover, Assert.Single(covers.Items));
                 }
             }
@@ -94,11 +94,11 @@ public class ServiceAuditPublishingTests
     }
 
     [Theory]
-    [InlineData(AuditEntityType.Claim, "POST")]
-    [InlineData(AuditEntityType.Claim, "DELETE")]
-    [InlineData(AuditEntityType.Cover, "POST")]
-    [InlineData(AuditEntityType.Cover, "DELETE")]
-    public async Task Failed_database_operations_do_not_enqueue_events(AuditEntityType type, string operation)
+    [InlineData(AuditEntityType.Claim, AuditAction.Created)]
+    [InlineData(AuditEntityType.Claim, AuditAction.Deleted)]
+    [InlineData(AuditEntityType.Cover, AuditAction.Created)]
+    [InlineData(AuditEntityType.Cover, AuditAction.Deleted)]
+    public async Task Failed_database_operations_do_not_enqueue_events(AuditEntityType type, AuditAction operation)
     {
         using var timeout = CreateTimeout();
         var queue = new AuditQueue();
@@ -113,20 +113,20 @@ public class ServiceAuditPublishingTests
         if (type == AuditEntityType.Claim)
         {
             var service = new ClaimService(claims, auditer, covers);
-            if (operation == "POST") claims.AddFailure = failure;
+            if (operation == AuditAction.Created) claims.AddFailure = failure;
             else
             {
                 claims.Items.Add(claim);
                 claims.DeleteFailure = failure;
             }
-            requestOperation = operation == "POST" ? service.CreateAsync(claim, timeout.Token) : service.DeleteAsync(claim.Id, timeout.Token);
+            requestOperation = operation == AuditAction.Created ? service.CreateAsync(claim, timeout.Token) : service.DeleteAsync(claim.Id, timeout.Token);
         }
         else
         {
             var service = new CoverService(covers, auditer, new PremiumCalculator(), NewClock());
-            if (operation == "POST") covers.AddFailure = failure;
+            if (operation == AuditAction.Created) covers.AddFailure = failure;
             else covers.DeleteFailure = failure;
-            requestOperation = operation == "POST" ? service.CreateAsync(NewCover(), timeout.Token) : service.DeleteAsync(cover.Id, timeout.Token);
+            requestOperation = operation == AuditAction.Created ? service.CreateAsync(NewCover(), timeout.Token) : service.DeleteAsync(cover.Id, timeout.Token);
         }
 
         Assert.Same(failure, await Assert.ThrowsAsync<InvalidOperationException>(() => requestOperation));
@@ -160,25 +160,25 @@ public class ServiceAuditPublishingTests
     }
 
     [Theory]
-    [InlineData(AuditEntityType.Claim, "POST", "before-enqueue")]
-    [InlineData(AuditEntityType.Claim, "DELETE", "before-enqueue")]
-    [InlineData(AuditEntityType.Cover, "POST", "before-enqueue")]
-    [InlineData(AuditEntityType.Cover, "DELETE", "before-enqueue")]
-    [InlineData(AuditEntityType.Claim, "POST", "during-enqueue")]
-    [InlineData(AuditEntityType.Claim, "DELETE", "during-enqueue")]
-    [InlineData(AuditEntityType.Cover, "POST", "during-enqueue")]
-    [InlineData(AuditEntityType.Cover, "DELETE", "during-enqueue")]
-    [InlineData(AuditEntityType.Claim, "POST", "timeout")]
-    [InlineData(AuditEntityType.Claim, "DELETE", "timeout")]
-    [InlineData(AuditEntityType.Cover, "POST", "timeout")]
-    [InlineData(AuditEntityType.Cover, "DELETE", "timeout")]
+    [InlineData(AuditEntityType.Claim, AuditAction.Created, "before-enqueue")]
+    [InlineData(AuditEntityType.Claim, AuditAction.Deleted, "before-enqueue")]
+    [InlineData(AuditEntityType.Cover, AuditAction.Created, "before-enqueue")]
+    [InlineData(AuditEntityType.Cover, AuditAction.Deleted, "before-enqueue")]
+    [InlineData(AuditEntityType.Claim, AuditAction.Created, "during-enqueue")]
+    [InlineData(AuditEntityType.Claim, AuditAction.Deleted, "during-enqueue")]
+    [InlineData(AuditEntityType.Cover, AuditAction.Created, "during-enqueue")]
+    [InlineData(AuditEntityType.Cover, AuditAction.Deleted, "during-enqueue")]
+    [InlineData(AuditEntityType.Claim, AuditAction.Created, "timeout")]
+    [InlineData(AuditEntityType.Claim, AuditAction.Deleted, "timeout")]
+    [InlineData(AuditEntityType.Cover, AuditAction.Created, "timeout")]
+    [InlineData(AuditEntityType.Cover, AuditAction.Deleted, "timeout")]
     public async Task Persisted_mutation_enqueues_despite_client_cancellation_or_reports_independent_timeout(
-        AuditEntityType type, string operation, string cancellationStage)
+        AuditEntityType type, AuditAction operation, string cancellationStage)
     {
         using var timeout = CreateTimeout();
         using var requestCancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var queue = new AuditQueue();
-        var filler = new AuditEvent(AuditEntityType.Claim, "buffered", "POST", NewClock().GetLocalNow().DateTime);
+        var filler = new AuditEvent(AuditEntityType.Claim, "buffered", AuditAction.Created, NewClock().GetLocalNow().DateTime);
         for (var index = 0; index < 1000; index++)
             await queue.EnqueueAsync(filler, timeout.Token);
 
@@ -187,7 +187,7 @@ public class ServiceAuditPublishingTests
         var claim = NewClaim();
         var cover = NewCover();
         if (type == AuditEntityType.Claim) covers.Items.Add(cover);
-        if (operation == "DELETE")
+        if (operation == AuditAction.Deleted)
         {
             if (type == AuditEntityType.Claim) claims.Items.Add(claim);
             else covers.Items.Add(cover);
@@ -203,14 +203,14 @@ public class ServiceAuditPublishingTests
         if (type == AuditEntityType.Claim)
         {
             var service = new ClaimService(claims, auditer, covers);
-            mutation = operation == "POST"
+            mutation = operation == AuditAction.Created
                 ? service.CreateAsync(claim, requestCancellation.Token)
                 : service.DeleteAsync(claim.Id, requestCancellation.Token);
         }
         else
         {
             var service = new CoverService(covers, auditer, new PremiumCalculator(), NewClock());
-            mutation = operation == "POST"
+            mutation = operation == AuditAction.Created
                 ? service.CreateAsync(cover, requestCancellation.Token)
                 : service.DeleteAsync(cover.Id, requestCancellation.Token);
         }
@@ -218,12 +218,12 @@ public class ServiceAuditPublishingTests
         Assert.False(mutation.IsCompleted);
         if (type == AuditEntityType.Claim)
         {
-            if (operation == "DELETE") Assert.Empty(claims.Items);
+            if (operation == AuditAction.Deleted) Assert.Empty(claims.Items);
             else Assert.Same(claim, Assert.Single(claims.Items));
         }
         else
         {
-            if (operation == "DELETE") Assert.Empty(covers.Items);
+            if (operation == AuditAction.Deleted) Assert.Empty(covers.Items);
             else Assert.Same(cover, Assert.Single(covers.Items));
         }
         Assert.All(claims.Tokens.Concat(covers.Tokens), token => Assert.Equal(requestCancellation.Token, token));
@@ -257,7 +257,7 @@ public class ServiceAuditPublishingTests
                 if (reader.Current.EntityId != "buffered") published.Add(reader.Current);
             var auditEvent = Assert.Single(published);
             Assert.Equal(type, auditEvent.EntityType);
-            Assert.Equal(operation, auditEvent.HttpRequestType);
+            Assert.Equal(operation, auditEvent.Action);
             Assert.Equal(type == AuditEntityType.Claim ? claim.Id : cover.Id, auditEvent.EntityId);
         }
     }
