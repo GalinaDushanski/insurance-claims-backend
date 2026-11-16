@@ -1,0 +1,43 @@
+using Claims.Data;
+using Microsoft.EntityFrameworkCore;
+
+namespace Claims.Repositories;
+
+public class CoverRepository : ICoverRepository
+{
+    private readonly ClaimsContext _context;
+
+    public CoverRepository(ClaimsContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<IEnumerable<Cover>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        return await _context.Covers.ToListAsync(cancellationToken);
+    }
+
+    public async Task<Cover?> GetByIdAsync(string id, CancellationToken cancellationToken = default)
+    {
+        return await _context.Covers
+            .Where(cover => cover.Id == id)
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task AddAsync(Cover cover, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        _context.Covers.Add(cover);
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)
+    {
+        var cover = await GetByIdAsync(id, cancellationToken);
+        if (cover is not null)
+        {
+            _context.Covers.Remove(cover);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+    }
+}
