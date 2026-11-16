@@ -33,6 +33,16 @@ run `dotnet dev-certs https --trust`.
 The database instances are temporary containers, not an externally managed store.
 Do not rely on their data surviving a new application session.
 
+Successful GET operations return 200 OK. `POST /Covers` and `POST /Claims` return
+201 Created with a `Location` header pointing to the created resource's GET-by-ID
+endpoint. Successful DELETE operations return 204 No Content. GET or DELETE for a
+missing resource returns 404 Not Found. Premium quotes use `GET /Covers/compute`
+with `startDate`, `endDate`, and `coverType` query parameters.
+
+Anonymous `GET /health` returns an empty 200 OK response when the API responds.
+It is a liveness endpoint and does not check MongoDB, SQL Server, or external
+services.
+
 ## Implementation
 
 - **Task 1:** Thin controllers call application services; focused repositories own
@@ -61,6 +71,9 @@ Application owns the repository and audit interfaces; Infrastructure implements 
 Only the API composition root connects those implementations. Domain has no external
 packages, and Application has no framework or persistence packages. API DTOs retain
 the existing JSON contract while MongoDB mappings are configured in Infrastructure.
+`PremiumCalculator` and `IPremiumCalculator` are in `Claims.Domain.Services`.
+`CoverService` depends on `IPremiumCalculator`; the API registers the stateless
+`PremiumCalculator` implementation as a singleton for that interface.
 See [the architecture guide](docs/ARCHITECTURE.md) for the dependency diagram and DI lifetimes.
 
 ## Run the tests
@@ -92,7 +105,12 @@ Start with the [architecture and reviewer guide](docs/ARCHITECTURE.md) for code
 entry points, date and pricing assumptions, and testing boundaries. The
 [original assignment](docs/README.md) is preserved unchanged.
 
-Known limitations include audit event loss on crashes, confirmed MongoDB
-sub-millisecond date precision loss, and unresolved dependency security warnings.
-The architecture document explains their impact; the precision tests reproduce
-the limitation rather than fixing it.
+Known limitations include audit event loss on crashes and confirmed MongoDB
+sub-millisecond date precision loss. The architecture document explains their
+impact; the precision tests reproduce the limitation rather than fixing it.
+
+`System.Security.Cryptography.Pkcs` was updated from 9.0.11 to 9.0.21 through a
+direct reference in `Claims.Infrastructure`, overriding the dependency brought in
+by `Microsoft.Data.SqlClient`. The latest verification run of
+`dotnet list package --vulnerable --include-transitive` reported no known
+vulnerable packages across all five projects using the current NuGet sources.

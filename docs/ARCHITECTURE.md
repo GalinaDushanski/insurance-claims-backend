@@ -22,8 +22,8 @@ Claims.Domain         → none
 ```
 
 Domain and Application have no external package or framework references.
-`Claims.Tests` references all four projects. Existing namespaces are retained;
-project membership enforces the boundaries.
+`Claims.Tests` references all four projects. Project membership enforces the
+boundaries; the premium calculator types use the `Claims.Domain.Services` namespace.
 
 [Program.cs](../Claims.Api/Program.cs) composes the application. Its Infrastructure
 reference registers adapters and initializes databases; controllers use Application
@@ -78,12 +78,26 @@ Explicit JSON offsets normalize to UTC; timezone-free input and service
 is invariant; encode positive-offset `+` as `%2B`.
 
 Invalid submissions return 400 with field errors. A missing referenced cover is a
-`coverId` validation error; missing-resource GET/DELETE returns 404. Successful
-operations return 200, DELETE has an empty body, and empty lists return `[]`.
+`coverId` validation error; missing-resource GET/DELETE operations return 404 Not
+Found. Successful GET operations return 200 OK, and empty lists return `[]`.
+`POST /Covers` and `POST /Claims` return 201 Created with a `Location` header
+pointing to the created resource's GET-by-ID endpoint. Successful DELETE operations
+return 204 No Content with an empty body. Premium quotes use
+`GET /Covers/compute` with `startDate`, `endDate`, and `coverType` query parameters.
 Compatibility retains required create-body `id` placeholders, replaced by generated
 GUIDs, and required claim `name`. Cover premiums are calculated server-side.
 
+Anonymous `GET /health` returns an empty 200 OK response when the API responds,
+including when an authentication-required fallback policy is configured. It checks
+only that the API can respond; it does not check MongoDB, SQL Server, or external
+services. Existing database startup and migration behavior is unchanged.
+
 ## Premium calculation
+
+`PremiumCalculator` and `IPremiumCalculator` are in `Claims.Domain.Services` in
+Domain. `CoverService` depends on `IPremiumCalculator`, and the API registers the
+stateless implementation as a singleton using
+`AddSingleton<IPremiumCalculator, PremiumCalculator>()`.
 
 [PremiumCalculator](../Claims.Domain/Services/PremiumCalculator.cs) uses a base daily
 rate of 1250, multiplied by 1.10 for Yacht, 1.20 for PassengerShip, 1.50 for Tanker,
@@ -160,8 +174,10 @@ against the reloaded boundary. Input is neither rejected nor normalized to stora
 precision. [Precision tests](../Claims.Tests/Integration/MongoDateTimePrecisionTests.cs)
 reproduce this limitation; millisecond-aligned values round-trip exactly.
 
-**Dependency warnings:** NU1902/NU1903 remain for transitive
-`System.Security.Cryptography.Pkcs 9.0.11` via `Microsoft.Data.SqlClient`, covering
-Moderate/High denial-of-service advisories. Direct application exploitability has
-not been established. Temporary container data should not be expected to survive
-application restarts.
+**Dependency security:** `System.Security.Cryptography.Pkcs` was updated from
+9.0.11 to the patched 9.0.21 release through a direct reference in
+`Claims.Infrastructure`, overriding the transitive dependency from
+`Microsoft.Data.SqlClient`. The latest verification run of
+`dotnet list package --vulnerable --include-transitive` reported no known
+vulnerable packages across all five projects using the current NuGet sources.
+Temporary container data should not be expected to survive application restarts.
