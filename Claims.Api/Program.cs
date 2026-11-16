@@ -1,3 +1,4 @@
+using Claims.Domain.Services;
 using Claims.Filters;
 using Claims.Infrastructure;
 using Claims.Services;
@@ -24,7 +25,7 @@ builder.Services.AddClaimsInfrastructure(databases.SqlConnectionString,
     databases.MongoConnectionString, builder.Configuration["MongoDb:DatabaseName"]!);
 builder.Services.AddScoped<IClaimService, ClaimService>();
 builder.Services.AddScoped<ICoverService, CoverService>();
-builder.Services.AddSingleton<PremiumCalculator>();
+builder.Services.AddSingleton<IPremiumCalculator, PremiumCalculator>();
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

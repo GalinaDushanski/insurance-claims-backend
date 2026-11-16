@@ -1,3 +1,4 @@
+using Claims.Domain.Services;
 using Claims.Api.Contracts;
 using System.Net;
 using System.Net.Http.Json;
@@ -47,7 +48,7 @@ public class ControllerResponseTests : IDisposable
                 services.AddScoped<IAuditer>(_ => new RecordingAuditer(_calls));
                 services.AddScoped<IClaimService, ClaimService>();
                 services.AddScoped<ICoverService, CoverService>();
-                services.AddSingleton<PremiumCalculator>();
+                services.AddSingleton<IPremiumCalculator, PremiumCalculator>();
                 services.AddSingleton<TimeProvider>(
                     new FixedTimeProvider(new DateTimeOffset(2030, 1, 1, 12, 0, 0, TimeSpan.Zero)));
             })

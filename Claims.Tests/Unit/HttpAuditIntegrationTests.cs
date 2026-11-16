@@ -1,3 +1,4 @@
+using Claims.Domain.Services;
 using Claims.Api.Contracts;
 using System.Net;
 using System.Net.Http.Json;
@@ -64,7 +65,7 @@ public class HttpAuditIntegrationTests
                     services.AddScoped<ICoverRepository>(_ => covers);
                     services.AddScoped<IClaimService, ClaimService>();
                     services.AddScoped<ICoverService, CoverService>();
-                    services.AddSingleton<PremiumCalculator>();
+                    services.AddSingleton<IPremiumCalculator, PremiumCalculator>();
                     services.AddSingleton<TimeProvider>(clock);
                     services.AddSingleton<AuditQueue>();
                     services.AddSingleton<IAuditer, Auditer>();

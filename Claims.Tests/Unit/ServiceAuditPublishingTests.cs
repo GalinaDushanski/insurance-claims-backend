@@ -1,3 +1,4 @@
+using Claims.Domain.Services;
 using Claims.Auditing;
 using Claims.Repositories;
 using Claims.Services;
@@ -42,7 +43,7 @@ public class ServiceAuditPublishingTests
         services.AddScoped<ICoverRepository>(_ => covers);
         services.AddScoped<IClaimService, ClaimService>();
         services.AddScoped<ICoverService, CoverService>();
-        services.AddSingleton<PremiumCalculator>();
+        services.AddSingleton<IPremiumCalculator, PremiumCalculator>();
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<AuditWorker>());
         await worker.StartAsync(timeout.Token);

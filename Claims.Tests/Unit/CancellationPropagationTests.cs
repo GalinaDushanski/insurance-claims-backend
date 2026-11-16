@@ -1,3 +1,4 @@
+using Claims.Domain.Services;
 using Claims.Api.Contracts;
 using Claims.Controllers;
 using Claims.Services;

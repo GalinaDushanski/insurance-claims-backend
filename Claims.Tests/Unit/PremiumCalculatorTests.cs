@@ -1,5 +1,5 @@
 using System.Globalization;
-using Claims.Services;
+using Claims.Domain.Services;
 using Xunit;
 
 namespace Claims.Tests.Unit;

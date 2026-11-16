@@ -1,6 +1,6 @@
-namespace Claims.Services;
+namespace Claims.Domain.Services;
 
-public class PremiumCalculator
+public class PremiumCalculator : IPremiumCalculator
 {
     public decimal ComputePremium(DateTime startDate, DateTime endDate, CoverType coverType)
     {

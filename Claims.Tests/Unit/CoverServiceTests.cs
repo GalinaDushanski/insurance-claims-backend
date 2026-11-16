@@ -1,3 +1,4 @@
+using Claims.Domain.Services;
 using Claims.Services;
 using Claims.Exceptions;
 using Xunit;
@@ -17,6 +18,33 @@ public class CoverServiceTests
         _auditer = new RecordingAuditer(_calls);
         _service = new CoverService(_repository, _auditer, new PremiumCalculator(),
             new FixedTimeProvider(new DateTimeOffset(2030, 1, 1, 12, 0, 0, TimeSpan.Zero)));
+    }
+
+    [Fact]
+    public async Task Quotes_and_creation_use_the_injected_calculator_with_normalized_dates()
+    {
+        var calculator = new RecordingPremiumCalculator();
+        var service = new CoverService(_repository, _auditer, calculator,
+            new FixedTimeProvider(new DateTimeOffset(2030, 1, 1, 12, 0, 0, TimeSpan.Zero)));
+        var cover = NewCover();
+
+        var quote = service.ComputePremium(cover.StartDate, cover.EndDate, cover.Type, TestContext.Current.CancellationToken);
+        Assert.Equal(123m, quote);
+        Assert.Empty(_repository.Items);
+        Assert.Empty(_calls);
+        var created = await service.CreateAsync(cover, TestContext.Current.CancellationToken);
+
+        Assert.Equal(123m, created.Premium);
+        Assert.Same(created, Assert.Single(_repository.Items));
+        Assert.Equal(2, calculator.Calls.Count);
+        Assert.All(calculator.Calls, call =>
+        {
+            Assert.Equal(new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc), call.Start);
+            Assert.Equal(new DateTime(2030, 1, 2, 0, 0, 0, DateTimeKind.Utc), call.End);
+            Assert.Equal(DateTimeKind.Utc, call.Start.Kind);
+            Assert.Equal(DateTimeKind.Utc, call.End.Kind);
+            Assert.Equal(CoverType.Yacht, call.Type);
+        });
     }
 
     [Fact]
@@ -244,6 +272,17 @@ public class CoverServiceTests
         Assert.Equal($"audit-cover:{(deleting ? "Deleted" : "Created")}:{item.Id}", _calls.Last());
         completion.SetResult();
         await operation;
+    }
+
+    private sealed class RecordingPremiumCalculator : IPremiumCalculator
+    {
+        public List<(DateTime Start, DateTime End, CoverType Type)> Calls { get; } = [];
+
+        public decimal ComputePremium(DateTime startDate, DateTime endDate, CoverType coverType)
+        {
+            Calls.Add((startDate, endDate, coverType));
+            return 123m;
+        }
     }
 
     private static Cover NewCover() =>

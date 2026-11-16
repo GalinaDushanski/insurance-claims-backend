@@ -1,4 +1,5 @@
 using Claims.Auditing;
+using Claims.Domain.Services;
 using Claims.Exceptions;
 using Claims.Repositories;
 using Claims.Validation;
@@ -10,10 +11,10 @@ public class CoverService : ICoverService
     private static readonly TimeSpan AuditEnqueueTimeout = TimeSpan.FromSeconds(5);
     private readonly ICoverRepository _repository;
     private readonly IAuditer _auditer;
-    private readonly PremiumCalculator _premiumCalculator;
+    private readonly IPremiumCalculator _premiumCalculator;
     private readonly TimeProvider _timeProvider;
 
-    public CoverService(ICoverRepository repository, IAuditer auditer, PremiumCalculator premiumCalculator, TimeProvider timeProvider)
+    public CoverService(ICoverRepository repository, IAuditer auditer, IPremiumCalculator premiumCalculator, TimeProvider timeProvider)
     {
         _repository = repository;
         _auditer = auditer;
