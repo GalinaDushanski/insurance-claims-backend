@@ -93,7 +93,7 @@ public class HttpAuditIntegrationTests
             var auditEvent = await gate.Started.Task.WaitAsync(timeout.Token);
             using var response = await request.WaitAsync(timeout.Token);
 
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal(operation == "POST" ? HttpStatusCode.Created : HttpStatusCode.NoContent, response.StatusCode);
             Assert.False(gate.Persisted.Task.IsCompleted);
             Assert.False(gate.Release.Task.IsCompleted);
             Assert.Equal(type, auditEvent.EntityType);

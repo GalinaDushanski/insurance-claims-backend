@@ -32,7 +32,7 @@ public class ClaimsControllerTests
         Assert.True(schemas.TryGetProperty("Claim", out _));
         Assert.True(schemas.TryGetProperty("Cover", out _));
         var computeParameters = api.RootElement.GetProperty("paths").GetProperty("/Covers/compute")
-            .GetProperty("post").GetProperty("parameters").EnumerateArray().ToArray();
+            .GetProperty("get").GetProperty("parameters").EnumerateArray().ToArray();
         Assert.Equal(new[] { "coverType", "endDate", "startDate" },
             computeParameters.Select(x => x.GetProperty("name").GetString()).Order());
         Assert.All(computeParameters, p => Assert.Equal("query", p.GetProperty("in").GetString()));
@@ -40,19 +40,20 @@ public class ClaimsControllerTests
         var start = DateTime.UtcNow.Date.AddDays(1);
         var end = start.AddDays(200);
         var quotePath = $"/Covers/compute?startDate={start:yyyy-MM-dd}&endDate={end:yyyy-MM-dd}&coverType=Yacht";
-        using var quote = await client.PostAsync(quotePath, null, token);
+        using var quote = await client.GetAsync(quotePath, token);
         Assert.Equal(HttpStatusCode.OK, quote.StatusCode);
         Assert.Equal(262487.50m, await quote.Content.ReadFromJsonAsync<decimal>(token));
         using var coverResponse = await client.PostAsJsonAsync("/Covers", new
         {
             id = "client-cover", startDate = start, endDate = end, type = "Yacht", premium = -1m
         }, token);
-        Assert.Equal(HttpStatusCode.OK, coverResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, coverResponse.StatusCode);
         var cover = await coverResponse.Content.ReadFromJsonAsync<JsonElement>(token);
         var coverId = cover.GetProperty("id").GetString()!;
         Assert.True(Guid.TryParse(coverId, out _));
         Assert.Equal(262487.50m, cover.GetProperty("premium").GetDecimal());
-        using var coverGet = await client.GetAsync($"/Covers/{coverId}", token);
+        Assert.Equal(new Uri(client.BaseAddress!, $"/Covers/{coverId}"), coverResponse.Headers.Location);
+        using var coverGet = await client.GetAsync(coverResponse.Headers.Location, token);
         Assert.Equal(HttpStatusCode.OK, coverGet.StatusCode);
         var reloadedCover = await coverGet.Content.ReadFromJsonAsync<JsonElement>(token);
         Assert.Equal(coverId, reloadedCover.GetProperty("id").GetString());
@@ -72,12 +73,13 @@ public class ClaimsControllerTests
         {
             id = "client-claim", coverId, created = start.AddDays(1), name = "Smoke claim", type = "Collision", damageCost = 42m
         }, token);
-        Assert.Equal(HttpStatusCode.OK, claimResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, claimResponse.StatusCode);
         var claim = await claimResponse.Content.ReadFromJsonAsync<JsonElement>(token);
         var claimId = claim.GetProperty("id").GetString()!;
         Assert.True(Guid.TryParse(claimId, out _));
         Assert.Equal(coverId, claim.GetProperty("coverId").GetString());
-        using var claimGet = await client.GetAsync($"/Claims/{claimId}", token);
+        Assert.Equal(new Uri(client.BaseAddress!, $"/Claims/{claimId}"), claimResponse.Headers.Location);
+        using var claimGet = await client.GetAsync(claimResponse.Headers.Location, token);
         Assert.Equal(HttpStatusCode.OK, claimGet.StatusCode);
         var reloadedClaim = await claimGet.Content.ReadFromJsonAsync<JsonElement>(token);
         Assert.Equal(claimId, reloadedClaim.GetProperty("id").GetString());
@@ -86,7 +88,7 @@ public class ClaimsControllerTests
         foreach (var path in new[] { $"/Claims/{claimId}", $"/Covers/{coverId}" })
         {
             using var deletion = await client.DeleteAsync(path, token);
-            Assert.Equal(HttpStatusCode.OK, deletion.StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent, deletion.StatusCode);
             Assert.Equal("", await deletion.Content.ReadAsStringAsync(token));
             using var missing = await client.GetAsync(path, token);
             Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);

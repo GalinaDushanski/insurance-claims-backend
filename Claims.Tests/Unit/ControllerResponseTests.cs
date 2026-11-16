@@ -118,12 +118,12 @@ public class ControllerResponseTests : IDisposable
     [Theory]
     [InlineData("/Claims/existing", "claim")]
     [InlineData("/Covers/existing", "cover")]
-    public async Task Existing_resource_delete_returns_200_publishes_after_deletion_and_returns_404_on_repeat(string path, string resource)
+    public async Task Existing_resource_delete_returns_204_publishes_after_deletion_and_returns_404_on_repeat(string path, string resource)
     {
         SeedResources();
         using var response = await _client.DeleteAsync(path, TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Equal("", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         Assert.Equal(new[] { "delete-start:existing", "delete-complete:existing", $"audit-{resource}:DELETE:existing" }, _calls);
         if (resource == "claim")
@@ -155,7 +155,7 @@ public class ControllerResponseTests : IDisposable
     }
 
     [Fact]
-    public async Task Claim_create_returns_200_generated_id_and_string_enum()
+    public async Task Claim_create_returns_201_generated_id_and_string_enum()
     {
         _covers.Items.Add(new Cover
         {
@@ -169,17 +169,18 @@ public class ControllerResponseTests : IDisposable
         using var response = await _client.PostAsJsonAsync("/Claims", claim.ToDto(), TestContext.Current.CancellationToken);
         var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.True(Guid.TryParse(body.GetProperty("id").GetString(), out _));
         Assert.Equal("cover-id", body.GetProperty("coverId").GetString());
         Assert.Equal("Collision", body.GetProperty("name").GetString());
         Assert.Equal(claim.Created, body.GetProperty("created").GetDateTime());
         Assert.Equal("Collision", body.GetProperty("type").GetString());
         Assert.Equal(42m, body.GetProperty("damageCost").GetDecimal());
+        await AssertCreatedLocationAsync(response, "/Claims", body);
     }
 
     [Fact]
-    public async Task Cover_create_returns_200_generated_id_and_computed_premium()
+    public async Task Cover_create_returns_201_generated_id_and_computed_premium()
     {
         var cover = new Cover
         {
@@ -189,23 +190,36 @@ public class ControllerResponseTests : IDisposable
         using var response = await _client.PostAsJsonAsync("/Covers", cover.ToDto(), TestContext.Current.CancellationToken);
         var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.True(Guid.TryParse(body.GetProperty("id").GetString(), out _));
         Assert.Equal("Yacht", body.GetProperty("type").GetString());
         Assert.Equal(cover.StartDate, body.GetProperty("startDate").GetDateTime());
         Assert.Equal(cover.EndDate, body.GetProperty("endDate").GetDateTime());
         Assert.Equal(1375m, body.GetProperty("premium").GetDecimal());
+        await AssertCreatedLocationAsync(response, "/Covers", body);
     }
 
     [Fact]
     public async Task Premium_endpoint_binds_query_parameters_and_returns_200_with_current_total()
     {
-        using var response = await _client.PostAsync(
-            "/Covers/compute?startDate=2030-01-01&endDate=2030-01-02&coverType=Yacht", null,
+        using var response = await _client.GetAsync(
+            "/Covers/compute?startDate=2030-01-01&endDate=2030-01-02&coverType=Yacht",
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(1375m, await response.Content.ReadFromJsonAsync<decimal>(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Premium_endpoint_rejects_post_without_side_effects()
+    {
+        using var response = await _client.PostAsync(
+            "/Covers/compute?startDate=2030-01-01&endDate=2030-01-02&coverType=Yacht", null,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        Assert.Empty(_covers.Items);
+        Assert.Empty(_calls);
     }
 
     [Theory]
@@ -258,7 +272,7 @@ public class ControllerResponseTests : IDisposable
         }, TestContext.Current.CancellationToken);
         var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var saved = Assert.Single(_claims.Items);
         Assert.Equal(new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc), saved.Created);
         Assert.Equal(DateTimeKind.Utc, saved.Created.Kind);
@@ -328,7 +342,7 @@ public class ControllerResponseTests : IDisposable
         using var creation = await SendCoverAsync(false, start, end);
         var body = await creation.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.OK, creation.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, creation.StatusCode);
         var saved = Assert.Single(_covers.Items);
         Assert.Equal(new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc), saved.StartDate);
         Assert.Equal(new DateTime(2030, 1, 2, 0, 0, 0, DateTimeKind.Utc), saved.EndDate);
@@ -345,7 +359,7 @@ public class ControllerResponseTests : IDisposable
     [InlineData("/Covers/compute?startDate=2030-01-01&coverType=Yacht", "endDate")]
     public async Task Malformed_or_missing_compute_dates_return_400(string path, string field)
     {
-        using var response = await _client.PostAsync(path, null, TestContext.Current.CancellationToken);
+        using var response = await _client.GetAsync(path, TestContext.Current.CancellationToken);
         var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -424,12 +438,24 @@ public class ControllerResponseTests : IDisposable
         Assert.Empty(_calls);
     }
 
+    private async Task AssertCreatedLocationAsync(
+        HttpResponseMessage response, string path, System.Text.Json.JsonElement created)
+    {
+        var location = Assert.IsType<Uri>(response.Headers.Location);
+        Assert.True(location.IsAbsoluteUri);
+        Assert.Equal($"{path}/{created.GetProperty("id").GetString()}", location.AbsolutePath);
+        using var get = await _client.GetAsync(location, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, get.StatusCode);
+        var body = await get.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(TestContext.Current.CancellationToken);
+        Assert.Equal(created.ToString(), body.ToString());
+    }
+
     private Task<HttpResponseMessage> SendCoverAsync(bool compute, string start, string end)
     {
         if (compute)
-            return _client.PostAsync(
+            return _client.GetAsync(
                 $"/Covers/compute?startDate={Uri.EscapeDataString(start)}&endDate={Uri.EscapeDataString(end)}&coverType=Yacht",
-                null, TestContext.Current.CancellationToken);
+                TestContext.Current.CancellationToken);
 
         return _client.PostAsJsonAsync("/Covers", new
         {

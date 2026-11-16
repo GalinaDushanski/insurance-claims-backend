@@ -26,13 +26,14 @@ namespace Claims.Controllers
         public async Task<ActionResult> CreateAsync(ClaimContract claim)
         {
             var createdClaim = await _claimService.CreateAsync(claim.ToDomain());
-            return Ok(createdClaim.ToDto());
+            return CreatedAtAction("Get", new { id = createdClaim.Id }, createdClaim.ToDto());
         }
 
         [HttpDelete("{id}")]
-        public async Task DeleteAsync(string id)
+        public async Task<ActionResult> DeleteAsync(string id)
         {
             await _claimService.DeleteAsync(id);
+            return NoContent();
         }
 
         [HttpGet("{id}")]

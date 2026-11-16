@@ -17,11 +17,11 @@ public class CoversController : ControllerBase
         _coverService = coverService;
     }
 
-    [HttpPost("compute")]
+    [HttpGet("compute")]
     public async Task<ActionResult> ComputePremiumAsync(
-        [ModelBinder(BinderType = typeof(UtcDateTimeModelBinder))] DateTime startDate,
-        [ModelBinder(BinderType = typeof(UtcDateTimeModelBinder))] DateTime endDate,
-        CoverType coverType)
+        [FromQuery, ModelBinder(BinderType = typeof(UtcDateTimeModelBinder))] DateTime startDate,
+        [FromQuery, ModelBinder(BinderType = typeof(UtcDateTimeModelBinder))] DateTime endDate,
+        [FromQuery] CoverType coverType)
     {
         return Ok(_coverService.ComputePremium(startDate, endDate, coverType));
     }
@@ -44,12 +44,13 @@ public class CoversController : ControllerBase
     public async Task<ActionResult> CreateAsync(CoverContract cover)
     {
         var createdCover = await _coverService.CreateAsync(cover.ToDomain());
-        return Ok(createdCover.ToDto());
+        return CreatedAtAction("Get", new { id = createdCover.Id }, createdCover.ToDto());
     }
 
     [HttpDelete("{id}")]
-    public async Task DeleteAsync(string id)
+    public async Task<ActionResult> DeleteAsync(string id)
     {
         await _coverService.DeleteAsync(id);
+        return NoContent();
     }
 }
