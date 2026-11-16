@@ -26,7 +26,7 @@ public class ClaimsControllerTests
         using var swagger = await client.GetAsync("/swagger/v1/swagger.json", token);
         Assert.Equal(HttpStatusCode.OK, swagger.StatusCode);
         using var api = JsonDocument.Parse(await swagger.Content.ReadAsStringAsync(token));
-        Assert.Equal(new[] { "/Claims", "/Claims/{id}", "/Covers", "/Covers/compute", "/Covers/{id}" }.Order(),
+        Assert.Equal(new[] { "/Claims", "/Claims/{id}", "/Covers", "/Covers/compute", "/Covers/{id}", "/health" }.Order(),
             api.RootElement.GetProperty("paths").EnumerateObject().Select(x => x.Name).Order());
         var schemas = api.RootElement.GetProperty("components").GetProperty("schemas");
         Assert.True(schemas.TryGetProperty("Claim", out _));
